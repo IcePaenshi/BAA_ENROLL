@@ -419,7 +419,7 @@ if (isset($_SESSION['user_id'])) {
                         </button>
 
                         <div class="back-to-home">
-                            <a href="#" onclick="showLanding(); return false;">
+                            <a href="#" onclick="showLanding(); return false;">← Back to Home</a>
                                 ← Back to Home Page
                             </a>
                         </div>
@@ -472,11 +472,13 @@ if (isset($_SESSION['user_id'])) {
                     <div class="error-message" id="enrollmentError"></div>
                     
                     <div class="enrollment-success" id="enrollmentSuccess">
-                        <div class="success-icon">✅</div>
+                        <div class="success-icon"></div>
                         <div class="success-message">
                             <h2>Enrollment Successful!</h2>
                             <p>Your enrollment application has been submitted successfully. We will review your documents and contact you soon.</p>
-                            <button type="button" class="enroll-submit-btn" onclick="showLanding(); document.getElementById('enrollmentForm').style.display = 'block'; document.getElementById('enrollmentSuccess').classList.remove('show'); document.getElementById('enrollmentForm').reset(); return false;">Back to Home</button>
+                            <button type="button" class="enroll-submit-btn" onclick="backFromEnrollment()">
+                                Back to Home
+                            </button>
                         </div>
                     </div>
 
@@ -541,7 +543,7 @@ if (isset($_SESSION['user_id'])) {
                     </form>
 
                     <div class="back-to-landing">
-                        <a href="#" onclick="showLanding(); return false;">← Back to Home</a>
+                        <a href="index.php">← Back to Home</a>
                     </div>
                 </div>
             </div>
@@ -793,6 +795,21 @@ if (isset($_SESSION['user_id'])) {
                 fileList.appendChild(fileItem);
             }
         }
+
+        function backFromEnrollment() {
+        const form = document.getElementById('enrollmentForm');
+        const success = document.getElementById('enrollmentSuccess');
+
+        if (form) {
+            form.style.display = 'block';
+            form.reset();
+        }
+
+        if (success) {
+            success.classList.remove('show');
+        }
+        showLanding();
+    }
     </script>
 </body>
 </html>

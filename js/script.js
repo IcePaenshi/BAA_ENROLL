@@ -1,3 +1,12 @@
+document.addEventListener('DOMContentLoaded', function () {
+    const dash = document.getElementById('dashboardPage');
+    if (dash) {
+        dash.style.display = 'block';
+        dash.style.opacity = '1';
+        dash.style.transform = 'none';
+    }
+});
+
 // IMAGE ROTATION FUNCTIONS
 let currentImage = 0;
 const images = document.querySelectorAll('.rotating-image');
@@ -54,7 +63,9 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(rotateImages, 2000);
     }
 
+    if (document.getElementById('landingPage')) {
     showLanding();
+}
 });
 
 // PAGE NAVIGATION
@@ -68,12 +79,16 @@ function showLogin() {
 }
 
 function showLanding() {
-    document.getElementById('landingPage').style.display = 'block';
-    document.getElementById('loginPage').style.display = 'none';
-    document.getElementById('enrollmentPage').style.display = 'none';
-    document.getElementById('dashboardPage').style.display = 'none';
-    document.getElementById('errorMessage').classList.remove('show');
+    const landingPage = document.getElementById('landingPage');
+    const loginPage = document.getElementById('loginPage');
+    const enrollmentPage = document.getElementById('enrollmentPage');
+
+    if (landingPage) landingPage.style.display = 'block';
+    if (loginPage) loginPage.style.display = 'none';
+    if (enrollmentPage) enrollmentPage.style.display = 'none';
 }
+
+
 
 function showDashboard() {
     document.getElementById('landingPage').style.display = 'none';
@@ -271,7 +286,10 @@ function formatDate(dateString) {
 function navigateTo(page) {
     console.log(`Navigating to: ${page}`);
     toggleSidebar();
-    
+
+    const isAdmin = document.querySelector('.grades-card') && 
+    !document.querySelector('.subjects-card');
+
     // Remove active class from all menu items
     const menuItems = document.querySelectorAll('.sidebar ul li a');
     menuItems.forEach(item => {
@@ -284,6 +302,34 @@ function navigateTo(page) {
         clickedItem.classList.add('active');
     }
     
+    if (document.body.classList.contains('admin-mode')) {
+    const enrollment = document.querySelector('.grades-card');
+    const profile = document.querySelector('.profile-card');
+
+    if (enrollment) {
+        enrollment.style.display = page === 'home' ? 'flex' : 'none';
+        enrollment.style.width = '100%';
+    }
+
+    if (profile) {
+        profile.style.display = page === 'profile' ? 'flex' : 'none';
+        profile.style.width = '100%';
+    }
+
+    if (page === 'home') {
+        if (typeof loadEnrollments === 'function') {
+            loadEnrollments();
+        }
+    }
+
+    if (page === 'profile') {
+        loadProfile();
+    }
+
+    return;
+}
+
+
     // Get dashboard container
     const dashboardMain = document.querySelector('.dashboard-main');
     if (!dashboardMain) {
@@ -554,9 +600,8 @@ document.querySelectorAll('button, a').forEach(element => {
 
 // INITIAL LOAD
 document.addEventListener('DOMContentLoaded', function() {
-    // If we're on the dashboard page, load initial data
-    if (document.getElementById('dashboardPage').style.display !== 'none') {
-        // Load initial data for home page
+    const dash = document.getElementById('dashboardPage');
+    if (dash) {
         loadEvents();
         loadGrades();
         loadSubjects();

@@ -240,7 +240,7 @@ $events = $eventsStmt->fetchAll(PDO::FETCH_ASSOC);
         <?php endif; ?>
     </style>
 </head>
-<body>
+<body class="<?php echo $userRole == 'admin' ? 'admin-mode' : ''; ?>">
     <!-- Dashboard Page -->
     <div class="dashboard-page" id="dashboardPage">
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
@@ -262,7 +262,6 @@ $events = $eventsStmt->fetchAll(PDO::FETCH_ASSOC);
                     <li><a href="#" onclick="navigateTo('profile'); return false;" id="menu-profile">Profile</a></li>
                     <li><a href="#" onclick="navigateTo('announcements'); return false;" id="menu-announcements">Announcements</a></li>
                 <?php endif; ?>
-                
                 <?php if ($userRole == 'teacher'): ?>
                 <li><a href="teacher_grades.php" id="menu-teacher">Grade Encoding</a></li>
                 <?php endif; ?>
@@ -289,7 +288,8 @@ $events = $eventsStmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="header-right">
                         <div class="user-info-container">
                             <span class="user-name" id="userName"><?php echo htmlspecialchars($fullName); ?></span>
-                            <button class="logout-btn" onclick="handleLogout()">Logout</button>
+                            <button class="logout-btn" onclick="window.location.href='php/logout.php'">Logout</button>
+
                         </div>
                     </div>
                 </div>
