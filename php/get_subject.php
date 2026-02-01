@@ -1,12 +1,42 @@
 <?php
 header('Content-Type: application/json');
-echo json_encode([
-    'success' => true,
-    'subjects' => [
-        ['subject_name' => 'Mathematics', 'schedule' => 'Mon & Wed, 8:00 AM'],
-        ['subject_name' => 'Science', 'schedule' => 'Tue & Thu, 9:30 AM'],
-        ['subject_name' => 'English', 'schedule' => 'Mon & Wed, 1:00 PM'],
-        ['subject_name' => 'History', 'schedule' => 'Tue & Thu, 2:30 PM']
-    ]
-]);
+session_start();
+require_once 'db.php';
+
+// Check if user is logged in and is a student
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'student') {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Unauthorized access'
+    ]);
+    exit();
+}
+
+$student_id = $_SESSION['user_id'];
+
+try {
+    $stmt = $pdo->prepare("
+        SELECT 
+            s.subject_name, 
+            g.grade, 
+            g.quarter,
+            g.school_year
+        FROM grades g 
+        JOIN subjects s ON g.subject_id = s.id 
+        WHERE g.student_id = ? 
+        ORDER BY s.subject_name, g.quarter
+    ");
+    $stmt->execute([$student_id]);
+    $grades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    echo json_encode([
+        'success' => true,
+        'grades' => $grades
+    ]);
+} catch (PDOException $e) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Error fetching grades: ' . $e->getMessage()
+    ]);
+}
 ?>

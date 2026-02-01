@@ -303,27 +303,51 @@ function navigateTo(page) {
     }
     
     if (document.body.classList.contains('admin-mode')) {
+    const dashboardLeft = document.querySelector('.dashboard-left');
+    const dashboardRight = document.querySelector('.dashboard-right');
     const enrollment = document.querySelector('.grades-card');
     const profile = document.querySelector('.profile-card');
-
-    if (enrollment) {
-        enrollment.style.display = page === 'home' ? 'flex' : 'none';
-        enrollment.style.width = '100%';
-    }
-
-    if (profile) {
-        profile.style.display = page === 'profile' ? 'flex' : 'none';
-        profile.style.width = '100%';
-    }
+    const users = document.querySelector('.users-card');
+    const payables = document.querySelector('.payables-management-card');
+    const payments = document.querySelector('.payments-card');
 
     if (page === 'home') {
+        if (dashboardLeft) dashboardLeft.style.display = 'block';
+        if (dashboardRight) dashboardRight.style.display = 'block';
+        if (enrollment) enrollment.style.display = 'flex';
+        if (profile) profile.style.display = 'none';
+        if (users) users.style.display = 'none';
+        if (payables) payables.style.display = 'none';
+        if (payments) payments.style.display = 'none';
         if (typeof loadEnrollments === 'function') {
             loadEnrollments();
         }
-    }
-
-    if (page === 'profile') {
-        loadProfile();
+    } else {
+        if (dashboardLeft) dashboardLeft.style.display = 'none';
+        if (dashboardRight) dashboardRight.style.display = 'none';
+        if (enrollment) enrollment.style.display = 'none';
+        if (profile) profile.style.display = page === 'profile' ? 'flex' : 'none';
+        if (users) users.style.display = page === 'users' ? 'flex' : 'none';
+        if (payables) payables.style.display = page === 'payables' ? 'flex' : 'none';
+        if (payments) payments.style.display = page === 'payments' ? 'flex' : 'none';
+        if (page === 'profile') {
+            loadProfile();
+        }
+        if (page === 'users') {
+            if (typeof loadUsers === 'function') {
+                loadUsers();
+            }
+        }
+        if (page === 'payables') {
+            if (typeof loadStudents === 'function') {
+                loadStudents();
+            }
+        }
+        if (page === 'payments') {
+            if (typeof loadPaymentStudents === 'function') {
+                loadPaymentStudents();
+            }
+        }
     }
 
     return;
@@ -585,7 +609,7 @@ document.addEventListener('click', function(event) {
     const overlay = document.getElementById('sidebarOverlay');
     const menuBtn = document.querySelector('.menu-btn');
     
-    if (sidebar.classList.contains('open') && 
+    if (sidebar && sidebar.classList.contains('open') && 
         !sidebar.contains(event.target) && 
         menuBtn && !menuBtn.contains(event.target)) {
         sidebar.classList.remove('open');

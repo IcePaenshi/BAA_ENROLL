@@ -1,12 +1,32 @@
 <?php
 header('Content-Type: application/json');
-echo json_encode([
-    'success' => true,
-    'payables' => [
-        ['description' => 'Tuition Fee - Semester 1', 'due_date' => '2026-01-30', 'amount' => '15000.00'],
-        ['description' => 'Miscellaneous Fee', 'due_date' => '2026-02-15', 'amount' => '5000.00'],
-        ['description' => 'Book Rental', 'due_date' => '2026-01-15', 'amount' => '2000.00'],
-        ['description' => 'Library Fee', 'due_date' => '2026-02-28', 'amount' => '1000.00']
-    ]
-]);
+session_start();
+require_once 'db.php';
+
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'student') {
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit;
+}
+
+$userId = $_SESSION['user_id'];
+
+try {
+    $stmt = $pdo->prepare("
+        SELECT 
+            COALESCE(item_name, 'Tuition Fee') as description, 
+            due_date, 
+            amount,
+            COALESCE(status, 'pending') as status
+        FROM payables 
+        WHERE student_id = ? 
+        ORDER BY due_date ASC, status ASC
+    ");
+    $stmt->execute([$userId]);
+    $payables = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    echo json_encode(['success' => true, 'payables' => $payables]);
+} catch(PDOException $e) {
+    error_log("Error in get_payables.php: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+}
 ?>

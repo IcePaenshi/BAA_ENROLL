@@ -420,8 +420,6 @@ if (isset($_SESSION['user_id'])) {
 
                         <div class="back-to-home">
                             <a href="#" onclick="showLanding(); return false;">← Back to Home</a>
-                                ← Back to Home Page
-                            </a>
                         </div>
                     </form>
                 </div>
@@ -510,7 +508,53 @@ if (isset($_SESSION['user_id'])) {
                         <!-- Birthdate -->
                         <div class="enroll-input-group">
                             <label for="birthdate">Birthdate *</label>
-                            <input type="date" id="birthdate" name="birthdate" required>
+                            <div class="birthdate-group" style="display: flex; gap: 10px;">
+                                <select id="birthMonth" name="birthMonth" required style="flex: 1;">
+                                    <option value="">Month</option>
+                                    <option value="01">January</option>
+                                    <option value="02">February</option>
+                                    <option value="03">March</option>
+                                    <option value="04">April</option>
+                                    <option value="05">May</option>
+                                    <option value="06">June</option>
+                                    <option value="07">July</option>
+                                    <option value="08">August</option>
+                                    <option value="09">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
+                                <select id="birthDay" name="birthDay" required style="flex: 1;">
+                                    <option value="">Day</option>
+                                    <!-- Days will be populated by JS -->
+                                </select>
+                                <input type="number" id="birthYear" name="birthYear" placeholder="Year" required readonly style="flex: 1;">
+                            </div>
+                        </div>
+
+                        <!-- Grade Level -->
+                        <div class="enroll-input-group">
+                            <label for="grade">Grade Level *</label>
+                            <select id="grade" name="grade" required>
+                                <option value="">--Select Grade--</option>
+                                <option value="7">Grade 7</option>
+                                <option value="8">Grade 8</option>
+                                <option value="9">Grade 9</option>
+                                <option value="10">Grade 10</option>
+                                <option value="11">Grade 11</option>
+                                <option value="12">Grade 12</option>
+                            </select>
+                        </div>
+
+                        <!-- Strand (for Grades 11-12) -->
+                        <div class="enroll-input-group" id="strandPicker" style="display: none;">
+                            <label for="strand">Strand *</label>
+                            <select id="strand" name="strand">
+                                <option value="">--Select Strand--</option>
+                                <option value="STEM">STEM (Science, Technology, Engineering, Mathematics)</option>
+                                <option value="ABM">ABM (Accountancy, Business, Management)</option>
+                                <option value="HUMSS">HUMSS (Humanities and Social Sciences)</option>
+                            </select>
                         </div>
 
                         <!-- Email -->
@@ -585,9 +629,59 @@ if (isset($_SESSION['user_id'])) {
             const fileList = document.getElementById('fileList');
             const phoneInput = document.getElementById('enrollPhone');
             const enrollmentForm = document.getElementById('enrollmentForm');
+            const gradeSelect = document.getElementById('grade');
+            const strandPicker = document.getElementById('strandPicker');
+            const strandSelect = document.getElementById('strand');
+            const ageInput = document.getElementById('age');
+            const birthMonth = document.getElementById('birthMonth');
+            const birthDay = document.getElementById('birthDay');
+            const birthYear = document.getElementById('birthYear');
 
             if (!fileUploadBox || !fileInput || !enrollmentForm) {
                 return;
+            }
+
+            // Populate days
+            function populateDays() {
+                const month = birthMonth.value;
+                const year = birthYear.value || 2026;
+                const daysInMonth = new Date(year, month, 0).getDate();
+                birthDay.innerHTML = '<option value="">Day</option>';
+                for (let i = 1; i <= daysInMonth; i++) {
+                    birthDay.innerHTML += `<option value="${i.toString().padStart(2, '0')}">${i}</option>`;
+                }
+            }
+
+            birthMonth.addEventListener('change', populateDays);
+            birthYear.addEventListener('input', populateDays);
+
+            // Age guesser
+            ageInput.addEventListener('input', function() {
+                const age = parseInt(this.value);
+                if (age && age > 0 && age < 120) {
+                    const currentYear = 2026;
+                    const birthYearValue = currentYear - age;
+                    birthYear.value = birthYearValue;
+                    populateDays();
+                }
+            });
+
+            // Grade level change handler
+            if (gradeSelect) {
+                gradeSelect.addEventListener('change', function() {
+                    const selectedGrade = parseInt(this.value);
+                    
+                    if (selectedGrade === 11 || selectedGrade === 12) {
+                        if (strandPicker) strandPicker.style.display = 'block';
+                        if (strandSelect) strandSelect.required = true;
+                    } else {
+                        if (strandPicker) strandPicker.style.display = 'none';
+                        if (strandSelect) {
+                            strandSelect.required = false;
+                            strandSelect.value = '';
+                        }
+                    }
+                });
             }
 
             // Initialize file list
@@ -669,6 +763,34 @@ if (isset($_SESSION['user_id'])) {
                     return;
                 }
 
+                // Validate grade selection
+                if (!gradeSelect.value) {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'Please select a grade level.';
+                        errorDiv.classList.add('show');
+                    }
+                    return;
+                }
+
+                // Validate strand for Grades 11-12
+                const selectedGrade = parseInt(gradeSelect.value);
+                if ((selectedGrade === 11 || selectedGrade === 12) && !strandSelect.value) {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'Please select a strand for Senior High School (Grade 11-12).';
+                        errorDiv.classList.add('show');
+                    }
+                    return;
+                }
+
+                // Validate birthdate
+                if (!birthYear.value || !birthMonth.value || !birthDay.value) {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'Please complete the birthdate fields.';
+                        errorDiv.classList.add('show');
+                    }
+                    return;
+                }
+
                 // Validate file sizes
                 for (let file of fileInput.files) {
                     if (file.size > 5 * 1024 * 1024) {
@@ -695,7 +817,10 @@ if (isset($_SESSION['user_id'])) {
                 formData.append('fullName', document.getElementById('fullName').value);
                 formData.append('age', document.getElementById('age').value);
                 formData.append('gender', document.getElementById('gender').value);
-                formData.append('birthdate', document.getElementById('birthdate').value);
+                const birthdate = `${birthYear.value}-${birthMonth.value}-${birthDay.value}`;
+                formData.append('birthdate', birthdate);
+                formData.append('grade', gradeSelect.value);
+                formData.append('strand', strandSelect.value || '');
                 formData.append('email', document.getElementById('enrollEmail').value);
                 formData.append('phone', '+63' + phone);
 

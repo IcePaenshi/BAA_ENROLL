@@ -12,7 +12,7 @@ try {
         email VARCHAR(100) UNIQUE,
         password VARCHAR(255),
         full_name VARCHAR(100),
-        role ENUM('student', 'teacher', 'admin') DEFAULT 'student',
+        role ENUM('student', 'teacher', 'admin', 'super_admin') DEFAULT 'student',
         grade_level VARCHAR(20),
         section VARCHAR(50),
         lrn VARCHAR(20),
@@ -57,6 +57,16 @@ $users = [
         'grade_level' => null,
         'section' => null,
         'lrn' => null
+    ],
+    [
+        'username' => 'super_admin',
+        'email' => 'superadmin@baa.edu',
+        'password' => password_hash('super123', PASSWORD_DEFAULT),
+        'full_name' => 'Super Admin User',
+        'role' => 'super_admin',
+        'grade_level' => null,
+        'section' => null,
+        'lrn' => null
     ]
 ];
 
@@ -90,6 +100,7 @@ echo "<tr><th>Username</th><th>Password</th><th>Role</th><th>Email</th></tr>";
 echo "<tr><td>student</td><td>student123</td><td>Student</td><td>student@baa.edu</td></tr>";
 echo "<tr><td>teacher</td><td>teacher123</td><td>Teacher</td><td>teacher@baa.edu</td></tr>";
 echo "<tr><td>admin</td><td>admin123</td><td>Admin</td><td>admin@baa.edu</td></tr>";
+echo "<tr><td>super_admin</td><td>super123</td><td>Super Admin</td><td>superadmin@baa.edu</td></tr>";
 echo "</table>";
 
 echo "<p><strong>Just use username and password to login!</strong></p>";

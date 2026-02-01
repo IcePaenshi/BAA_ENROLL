@@ -10,7 +10,7 @@ session_start();
     <link rel="stylesheet" href="css/style.css">
     <style>
         .enrollment-page {
-            display: none;
+            display: block;
             min-height: 100vh;
             background: #f5f5f0;
         }
@@ -105,6 +105,22 @@ session_start();
 
         .enroll-input-group select {
             cursor: pointer;
+        }
+
+        /* Strand Picker */
+        .strand-picker {
+            display: none;
+            margin-top: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .strand-picker.show {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         /* Phone Number */
@@ -355,6 +371,21 @@ session_start();
             display: block;
         }
 
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         @media (max-width: 1024px) {
             .enrollment-container {
                 grid-template-columns: 1fr;
@@ -416,11 +447,9 @@ session_start();
                     <div class="error-message" id="enrollmentError"></div>
                     
                     <div class="enrollment-success" id="enrollmentSuccess">
-                        <div class="success-icon"></div>
-                        <div class="success-message">
-                            <h2>Enrollment Successful!</h2>
-                            <p>Your enrollment application has been submitted successfully. We will review your documents and contact you soon.</p>
-                            <a href="index.php" class="enroll-submit-btn">Back to Home</a>
+                        <div class="success-icon">✅</div>
+                        <div class="success-message" id="successMessageContent">
+                            <!-- Dynamic content will be inserted here -->
                         </div>
                     </div>
 
@@ -455,6 +484,31 @@ session_start();
                             <input type="date" id="birthdate" name="birthdate" required>
                         </div>
 
+                        <!-- Grade Level -->
+                        <div class="enroll-input-group">
+                            <label for="grade">Grade Level *</label>
+                            <select id="grade" name="grade" required>
+                                <option value="">--Select Grade Level--</option>
+                                <option value="7">Grade 7</option>
+                                <option value="8">Grade 8</option>
+                                <option value="9">Grade 9</option>
+                                <option value="10">Grade 10</option>
+                                <option value="11">Grade 11</option>
+                                <option value="12">Grade 12</option>
+                            </select>
+                        </div>
+
+                        <!-- Strand Picker -->
+                        <div class="enroll-input-group strand-picker" id="strandPicker">
+                            <label for="strand">Strand *</label>
+                            <select id="strand" name="strand">
+                                <option value="">--Select Strand--</option>
+                                <option value="STEM">STEM (Science, Technology, Engineering, and Mathematics)</option>
+                                <option value="ABM">ABM (Accountancy, Business, and Management)</option>
+                                <option value="HUMSS">HUMSS (Humanities and Social Sciences)</option>
+                            </select>
+                        </div>
+
                         <!-- Email -->
                         <div class="enroll-input-group">
                             <label for="email">Email Address *</label>
@@ -482,7 +536,9 @@ session_start();
                             <div class="file-list" id="fileList"></div>
                         </div>
 
-                        <button type="submit" class="enroll-submit-btn">Submit Enrollment</button>
+                        <button type="submit" class="enroll-submit-btn" id="submitBtn">
+                            Submit Enrollment
+                        </button>
                     </form>
 
                     <div class="back-to-landing">
@@ -498,7 +554,6 @@ session_start();
         </div>
     </div>
 
-    <script src="js/script.js"></script>
     <script>
         // Initialize enrollment form
         document.addEventListener('DOMContentLoaded', function() {
@@ -507,6 +562,25 @@ session_start();
             const fileList = document.getElementById('fileList');
             const phoneInput = document.getElementById('phone');
             const enrollmentForm = document.getElementById('enrollmentForm');
+            const gradeSelect = document.getElementById('grade');
+            const strandPicker = document.getElementById('strandPicker');
+            const strandSelect = document.getElementById('strand');
+            const submitBtn = document.getElementById('submitBtn');
+
+            // Grade level change handler
+            gradeSelect.addEventListener('change', function() {
+                const selectedGrade = parseInt(this.value);
+                
+                // Show strand picker only for Grades 11 and 12
+                if (selectedGrade === 11 || selectedGrade === 12) {
+                    strandPicker.classList.add('show');
+                    strandSelect.setAttribute('required', 'required');
+                } else {
+                    strandPicker.classList.remove('show');
+                    strandSelect.removeAttribute('required');
+                    strandSelect.value = ''; // Clear selection
+                }
+            });
 
             // Drag and drop functionality
             fileUploadBox.addEventListener('dragover', (e) => {
@@ -565,69 +639,118 @@ session_start();
 
             // Form submission
             enrollmentForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+                e.preventDefault();
 
-            const errorDiv = document.getElementById('enrollmentError');
-            errorDiv.classList.remove('show');
+                const errorDiv = document.getElementById('enrollmentError');
+                errorDiv.classList.remove('show');
 
-            // Validate files
-            if (fileInput.files.length === 0) {
-                errorDiv.textContent = 'Please upload at least one document.';
-                errorDiv.classList.add('show');
-            return;
-    }
+                // Validate Grade 11/12 strand selection
+                const selectedGrade = parseInt(gradeSelect.value);
+                if ((selectedGrade === 11 || selectedGrade === 12) && !strandSelect.value) {
+                    errorDiv.textContent = 'Please select a strand for Senior High School (Grade 11-12).';
+                    errorDiv.classList.add('show');
+                    errorDiv.scrollIntoView({ behavior: 'smooth' });
+                    return;
+                }
 
-            // Create FormData
-            const formData = new FormData();
-            formData.append('fullName', document.getElementById('fullName').value);
-            formData.append('age', document.getElementById('age').value);
-            formData.append('gender', document.getElementById('gender').value);
-            formData.append('birthdate', document.getElementById('birthdate').value);
-            formData.append('email', document.getElementById('email').value);
-            formData.append('phone', document.getElementById('phone').value);   
-            for (let file of fileInput.files) {
-                formData.append('documents[]', file);
-    }
+                // Validate files
+                if (fileInput.files.length === 0) {
+                    errorDiv.textContent = 'Please upload at least one document.';
+                    errorDiv.classList.add('show');
+                    errorDiv.scrollIntoView({ behavior: 'smooth' });
+                    return;
+                }
 
-            try {
-                const response = await fetch('php/handle_enrollment.php', {
-                    method: 'POST',
-                    body: formData
-        });
+                // Create FormData
+                const formData = new FormData();
+                formData.append('fullName', document.getElementById('fullName').value.trim());
+                formData.append('age', document.getElementById('age').value);
+                formData.append('gender', document.getElementById('gender').value);
+                formData.append('birthdate', document.getElementById('birthdate').value);
+                formData.append('grade', gradeSelect.value);
+                formData.append('strand', strandSelect.value || '');
+                formData.append('email', document.getElementById('email').value.trim());
+                formData.append('phone', '+63' + document.getElementById('phone').value);
+                
+                // Add files individually
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('documents[]', fileInput.files[i]);
+                }
 
-            const result = await response.json();
+                // Show loading state
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<span class="spinner"></span> Processing...';
+                submitBtn.disabled = true;
 
-            if (result.success) {
-            // Ask user if they want to generate PDF
-            const generatePDF = confirm('Enrollment submitted successfully! Would you like to generate a PDF receipt?');
-            
-            if (generatePDF) {
-                window.open(result.pdf_url, '_blank');
-            }
+                try {
+                    console.log('Submitting form...');
+                    const response = await fetch('php/handle_enrollment.php', {
+                        method: 'POST',
+                        body: formData
+                    });
 
-            document.getElementById('enrollmentForm').style.display = 'none';
-            document.getElementById('enrollmentSuccess').classList.add('show');
-            
-            // Add link to view PDF later
-            const successDiv = document.getElementById('enrollmentSuccess');
-            const pdfLink = `<p style="margin-top: 20px;">
-                <a href="${result.pdf_url}" target="_blank" style="color: #0a2d63; text-decoration: underline;">
-                    📄 Click here to download your enrollment receipt
-                </a>
-            </p>`;
-            successDiv.querySelector('.success-message').innerHTML += pdfLink;
-            
-            } else {
-            errorDiv.textContent = result.message || 'An error occurred.';
-            errorDiv.classList.add('show');
-            }
-            } catch (error) {
-            console.error('Error:', error);
-            errorDiv.textContent = 'Network error. Please try again.';
-            errorDiv.classList.add('show');
-        }
-    });
+                    console.log('Response received');
+                    const result = await response.json();
+                    console.log('Result:', result);
 
+                    if (result.success) {
+                        // Ask user if they want to view PDF
+                        const viewPDF = confirm('Enrollment submitted successfully! Would you like to download your receipt?');
+                        
+                        if (viewPDF && result.pdf_url) {
+                            window.open(result.pdf_url, '_blank');
+                        }
+
+                        // Hide form and show success message
+                        document.getElementById('enrollmentForm').style.display = 'none';
+                        
+                        // Build success message
+                        let successHTML = `
+                            <h2>✅ Enrollment Successful!</h2>
+                            <p>Your enrollment application has been submitted successfully.</p>
+                            <p><strong>Enrollment ID: ${result.enrollmentId}</strong></p>
+                            <p>We will review your documents and contact you soon.</p>
+                        `;
+                        
+                        if (result.pdf_url) {
+                            successHTML += `
+                                <div style="margin: 25px 0;">
+                                    <a href="${result.pdf_url}" target="_blank" class="enroll-submit-btn" style="display: inline-block; width: auto; padding: 12px 24px; margin: 5px;">
+                                        📄 Download Receipt
+                                    </a>
+                                    <a href="index.php" class="enroll-submit-btn" style="display: inline-block; width: auto; padding: 12px 24px; margin: 5px; background: #666;">
+                                        Back to Home
+                                    </a>
+                                </div>
+                                <p style="color: #666; font-size: 14px;">
+                                    <em>You can download your receipt anytime from the link above.</em>
+                                </p>
+                            `;
+                        } else {
+                            successHTML += `
+                                <a href="index.php" class="enroll-submit-btn">Back to Home</a>
+                            `;
+                        }
+                        
+                        document.getElementById('successMessageContent').innerHTML = successHTML;
+                        document.getElementById('enrollmentSuccess').classList.add('show');
+                        
+                    } else {
+                        errorDiv.textContent = result.message || 'An error occurred. Please try again.';
+                        errorDiv.classList.add('show');
+                        errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    errorDiv.textContent = 'Network error. Please check your connection and try again.';
+                    errorDiv.classList.add('show');
+                    errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } finally {
+                    // Reset button state
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            });
         });
 
         function removeFile(index) {
@@ -641,9 +764,6 @@ session_start();
             }
             
             fileInput.files = dataTransfer.files;
-            document.querySelector('#fileList');
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '';
             updateFileList();
         }
 

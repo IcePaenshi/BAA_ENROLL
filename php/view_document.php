@@ -2,8 +2,8 @@
 session_start();
 require_once 'db.php';
 
-// Check if user is admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+// Check if user is admin or super_admin
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
     header('HTTP/1.0 403 Forbidden');
     echo 'Access Denied';
     exit();
