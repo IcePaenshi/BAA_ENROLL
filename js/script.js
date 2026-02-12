@@ -1,3 +1,14 @@
+// Make viewDocuments and generatePDF globally available for dashboard
+
+window.viewDocuments = function(enrollmentId) {
+    // Open a new tab to view documents for the enrollment
+    window.open('php/view_document.php?enrollment_id=' + encodeURIComponent(enrollmentId), '_blank');
+};
+
+window.generatePDF = function(enrollmentId) {
+    // Open a new tab to generate/download the PDF for the enrollment
+    window.open('php/enrollment_pdf.php?enrollment_id=' + encodeURIComponent(enrollmentId), '_blank');
+};
 document.addEventListener('DOMContentLoaded', function () {
     const dash = document.getElementById('dashboardPage');
     if (dash) {

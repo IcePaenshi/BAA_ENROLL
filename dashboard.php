@@ -2450,15 +2450,6 @@ try {
             }
         }
 
-        function viewDocuments(enrollmentId) {
-            alert('View documents for enrollment ID: ' + enrollmentId);
-            // You can implement document viewing logic here
-        }
-
-        function generatePDF(enrollmentId) {
-            alert('Generate PDF for enrollment ID: ' + enrollmentId);
-            // You can implement PDF generation logic here
-        }
 
         // Update clock immediately and every second
         updateLiveClock();

@@ -69,8 +69,9 @@ if (isset($_SESSION['user_id'])) {
 
         .enrollment-form-container {
             width: 100%;
-            max-width: 350px;
+            max-width: 400px;
             margin: 0 auto;
+            position: relative;
         }
 
         .enrollment-form-container h2 {
@@ -79,6 +80,150 @@ if (isset($_SESSION['user_id'])) {
             margin-bottom: 30px;
             font-weight: 600;
             text-align: center;
+        }
+
+        /* Terms Overlay */
+        .terms-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            min-height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            border-radius: 12px;
+            padding: 30px 25px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .terms-container {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .terms-title {
+            color: #0a2d63;
+            font-size: 24px;
+            margin-bottom: 25px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .requirements-display {
+            display: none;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .requirements-title {
+            color: #0a2d63;
+            font-size: 16px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .requirements-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .requirements-list li {
+            margin-bottom: 10px;
+            padding: 5px 0;
+            border-bottom: 1px dashed #e2e8f0;
+            color: #334155;
+            font-size: 14px;
+        }
+
+        .terms-text-container {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 15px;
+        }
+
+        .terms-text {
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .terms-text strong {
+            color: #0a2d63;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .checkbox-container label {
+            color: #334155;
+            font-size: 14px;
+            font-weight: normal;
+            cursor: pointer;
+            line-height: 1.5;
+        }
+
+        .proceed-btn-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .proceed-btn {
+            width: auto;
+            min-width: 250px;
+            background: #0a2d63;
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .proceed-btn:hover {
+            background: #082347;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(10, 45, 99, 0.3);
+        }
+
+        .proceed-btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .enroll-input-group {
@@ -246,6 +391,10 @@ if (isset($_SESSION['user_id'])) {
             display: none;
             text-align: center;
             padding: 40px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
 
         .enrollment-success.show {
@@ -255,6 +404,7 @@ if (isset($_SESSION['user_id'])) {
         .success-icon {
             font-size: 48px;
             margin-bottom: 20px;
+            color: #0a2d63;
         }
 
         .success-message h2 {
@@ -286,7 +436,7 @@ if (isset($_SESSION['user_id'])) {
 
         .back-to-landing {
             text-align: center;
-            margin-top: 20px;
+            margin-top: 25px;
         }
 
         .back-to-landing a {
@@ -300,6 +450,40 @@ if (isset($_SESSION['user_id'])) {
         .back-to-landing a:hover {
             color: #0a2d63;
             text-decoration: underline;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .back-btn {
+            width: auto;
+            min-width: 150px;
+            background: #64748b;
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .back-btn:hover {
+            background: #475569;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+        }
+
+        .submit-btn {
+            width: auto;
+            min-width: 200px;
+            margin-top: 0;
         }
 
         @media (max-width: 1024px) {
@@ -336,6 +520,19 @@ if (isset($_SESSION['user_id'])) {
 
             .enrollment-form-container h2 {
                 font-size: 22px;
+            }
+            
+            .proceed-btn {
+                min-width: 200px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .back-btn, .submit-btn {
+                width: 100%;
             }
         }
     </style>
@@ -394,11 +591,11 @@ if (isset($_SESSION['user_id'])) {
 
                     <form method="POST" action="php/login.php">
                         <div class="input-group">
-                            <label for="studentId">Email / Student ID</label>
+                            <label for="username">Username</label>
                             <div class="input-with-icon">
                                 <div class="custom-icon username-icon"></div>
-                                <input type="text" id="studentId" name="username" required 
-                                       placeholder="Enter your email or student ID">
+                                <input type="text" id="username" name="username" required 
+                                       placeholder="Enter your username">
                             </div>
                         </div>
 
@@ -470,7 +667,7 @@ if (isset($_SESSION['user_id'])) {
                     <div class="error-message" id="enrollmentError"></div>
                     
                     <div class="enrollment-success" id="enrollmentSuccess">
-                        <div class="success-icon"></div>
+                        <div class="success-icon">✓</div>
                         <div class="success-message">
                             <h2>Enrollment Successful!</h2>
                             <p>Your enrollment application has been submitted successfully. We will review your documents and contact you soon.</p>
@@ -480,13 +677,96 @@ if (isset($_SESSION['user_id'])) {
                         </div>
                     </div>
 
-                    <form id="enrollmentForm" style="display: block;">
-                        <h2>Student Enrollment</h2>
+                    <!-- Terms and Conditions Overlay -->
+                    <div id="termsOverlay" class="terms-overlay">
+                        <div class="terms-container">
+                            <h3 class="terms-title">Enrollment Requirements</h3>
+                            
+                            <!-- Grade Level Selector for Requirements -->
+                            <div class="enroll-input-group">
+                                <label for="reqGradeLevel">Select Grade Level to View Requirements</label>
+                                <select id="reqGradeLevel" onchange="showRequirements()">
+                                    <option value="">-- Select Grade Level --</option>
+                                    <option value="7">Grade 7</option>
+                                    <option value="8">Grade 8</option>
+                                    <option value="9">Grade 9</option>
+                                    <option value="10">Grade 10</option>
+                                    <option value="11">Grade 11</option>
+                                    <option value="12">Grade 12</option>
+                                </select>
+                            </div>
 
-                        <!-- Full Name -->
+                            <!-- Required Documents Display -->
+                            <div id="requirementsDisplay" class="requirements-display">
+                                <h4 class="requirements-title">Required Documents:</h4>
+                                <ul id="requirementsList" class="requirements-list"></ul>
+                            </div>
+
+                            <!-- Terms and Conditions -->
+                            <div style="margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                                <h4 style="color: #0a2d63; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Terms and Conditions</h4>
+                                <div class="terms-text-container">
+                                    <p class="terms-text"><strong>1. Accuracy of Information</strong><br>I certify that all information provided in this enrollment form is true, correct, and complete to the best of my knowledge. I understand that providing false information may result in disqualification or dismissal.</p>
+                                    
+                                    <p class="terms-text"><strong>2. Document Submission</strong><br>I understand that all required documents must be submitted complete and authenticated. Incomplete requirements may delay the enrollment process.</p>
+                                    
+                                    <p class="terms-text"><strong>3. School Policies</strong><br>I agree to abide by the rules, regulations, and policies of Baesa Adventist Academy, including but not limited to academic requirements, attendance, dress code, and code of conduct.</p>
+                                    
+                                    <p class="terms-text"><strong>4. Fees and Payments</strong><br>I understand that enrollment is not final until all necessary fees have been paid according to the school's payment schedule.</p>
+                                    
+                                    <p class="terms-text"><strong>5. Data Privacy</strong><br>I consent to the collection, storage, and processing of my personal information by Baesa Adventist Academy for enrollment and academic purposes, in compliance with the Data Privacy Act of 2012.</p>
+                                    
+                                    <p class="terms-text"><strong>6. Withdrawal and Refund</strong><br>I understand the school's policy on withdrawal and refund of fees as stated in the official student handbook.</p>
+                                </div>
+                                
+                                <!-- Agreement Checkbox -->
+                                <div class="checkbox-container">
+                                    <input type="checkbox" id="agreeTerms">
+                                    <label for="agreeTerms">I have read, understood, and agree to the Terms and Conditions and confirm that I have reviewed the required documents for my grade level.</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="proceed-btn-container">
+                            <button type="button" class="proceed-btn" id="proceedBtn" onclick="proceedToEnrollmentForm()" disabled>Proceed to Enrollment Form</button>
+                        </div>
+                    </div>
+
+                    <!-- Enrollment Form -->
+                    <form id="enrollmentForm" style="display: none;">
+                        <h2>Student Enrollment Form</h2>
+
+                        <!-- First Name -->
                         <div class="enroll-input-group">
-                            <label for="fullName">Full Name *</label>
-                            <input type="text" id="fullName" name="fullName" required placeholder="Enter your full name">
+                            <label for="firstName">First Name *</label>
+                            <input type="text" id="firstName" name="firstName" required placeholder="Enter first name">
+                        </div>
+
+                        <!-- Middle Name -->
+                        <div class="enroll-input-group">
+                            <label for="middleName">Middle Name</label>
+                            <input type="text" id="middleName" name="middleName" placeholder="Enter middle name">
+                        </div>
+
+                        <!-- Last Name -->
+                        <div class="enroll-input-group">
+                            <label for="lastName">Last Name *</label>
+                            <input type="text" id="lastName" name="lastName" required placeholder="Enter last name">
+                        </div>
+
+                        <!-- Suffix -->
+                        <div class="enroll-input-group">
+                            <label for="suffix">Suffix</label>
+                            <select id="suffix" name="suffix">
+                                <option value="">-- Select Suffix --</option>
+                                <option value="Jr.">Jr.</option>
+                                <option value="Sr.">Sr.</option>
+                                <option value="I">I</option>
+                                <option value="II">II</option>
+                                <option value="III">III</option>
+                                <option value="IV">IV</option>
+                                <option value="V">V</option>
+                            </select>
                         </div>
 
                         <!-- Age -->
@@ -507,7 +787,7 @@ if (isset($_SESSION['user_id'])) {
 
                         <!-- Birthdate -->
                         <div class="enroll-input-group">
-                            <label for="birthdate">Birthdate *</label>
+                            <label>Birthdate *</label>
                             <div class="birthdate-group" style="display: flex; gap: 10px;">
                                 <select id="birthMonth" name="birthMonth" required style="flex: 1;">
                                     <option value="">Month</option>
@@ -526,16 +806,15 @@ if (isset($_SESSION['user_id'])) {
                                 </select>
                                 <select id="birthDay" name="birthDay" required style="flex: 1;">
                                     <option value="">Day</option>
-                                    <!-- Days will be populated by JS -->
                                 </select>
-                                <input type="number" id="birthYear" name="birthYear" placeholder="Year" required readonly style="flex: 1;">
+                                <input type="number" id="birthYear" name="birthYear" placeholder="Year" required readonly style="flex: 1; background: #f8f9fa;">
                             </div>
                         </div>
 
                         <!-- Grade Level -->
                         <div class="enroll-input-group">
                             <label for="grade">Grade Level *</label>
-                            <select id="grade" name="grade" required>
+                            <select id="grade" name="grade" required onchange="handleGradeChange()">
                                 <option value="">--Select Grade--</option>
                                 <option value="7">Grade 7</option>
                                 <option value="8">Grade 8</option>
@@ -576,18 +855,21 @@ if (isset($_SESSION['user_id'])) {
                         <div class="enroll-input-group">
                             <label class="file-upload-label">Upload Required Documents *</label>
                             <div class="file-upload-box" id="fileUploadBox">
-                                <div class="file-upload-text">📄 Click to upload or drag files</div>
+                                <div class="file-upload-text">Click to upload or drag files</div>
                                 <div class="file-upload-hint">Accepted: PDF, Images (Max 5 files, 5MB each)</div>
                                 <input type="file" id="enrollDocuments" name="documents" multiple accept=".pdf,.jpg,.jpeg,.png" required>
                             </div>
                             <div class="file-list" id="fileList"></div>
                         </div>
 
-                        <button type="submit" class="enroll-submit-btn">Submit Enrollment</button>
+                        <div class="button-group">
+                            <button type="button" class="back-btn" onclick="backToTerms()">← Back</button>
+                            <button type="submit" class="enroll-submit-btn submit-btn">Submit Enrollment</button>
+                        </div>
                     </form>
 
                     <div class="back-to-landing">
-                        <a href="index.php">← Back to Home</a>
+                        <a href="#" onclick="backFromEnrollment(); return false;">← Back to Home</a>
                     </div>
                 </div>
             </div>
@@ -636,53 +918,93 @@ if (isset($_SESSION['user_id'])) {
             const birthMonth = document.getElementById('birthMonth');
             const birthDay = document.getElementById('birthDay');
             const birthYear = document.getElementById('birthYear');
+            const agreeCheckbox = document.getElementById('agreeTerms');
+            const proceedBtn = document.getElementById('proceedBtn');
 
             if (!fileUploadBox || !fileInput || !enrollmentForm) {
                 return;
             }
 
+            // Enable proceed button when terms are agreed
+            if (agreeCheckbox && proceedBtn) {
+                agreeCheckbox.addEventListener('change', function() {
+                    proceedBtn.disabled = !this.checked;
+                });
+            }
+
             // Populate days
             function populateDays() {
                 const month = birthMonth.value;
-                const year = birthYear.value || 2026;
+                const year = birthYear.value || new Date().getFullYear();
                 const daysInMonth = new Date(year, month, 0).getDate();
+                const currentDay = birthDay.value;
+                
                 birthDay.innerHTML = '<option value="">Day</option>';
                 for (let i = 1; i <= daysInMonth; i++) {
-                    birthDay.innerHTML += `<option value="${i.toString().padStart(2, '0')}">${i}</option>`;
+                    const dayValue = i.toString().padStart(2, '0');
+                    const selected = (currentDay === dayValue) ? 'selected' : '';
+                    birthDay.innerHTML += `<option value="${dayValue}" ${selected}>${i}</option>`;
                 }
             }
 
             birthMonth.addEventListener('change', populateDays);
             birthYear.addEventListener('input', populateDays);
 
-            // Age guesser
+            // Age guesser - Improved version with birthday logic
             ageInput.addEventListener('input', function() {
                 const age = parseInt(this.value);
                 if (age && age > 0 && age < 120) {
-                    const currentYear = 2026;
-                    const birthYearValue = currentYear - age;
+                    const today = new Date();
+                    const currentYear = today.getFullYear();
+                    const currentMonth = today.getMonth() + 1;
+                    const currentDay = today.getDate();
+                    
+                    const selectedMonth = parseInt(birthMonth.value);
+                    const selectedDay = parseInt(birthDay.value);
+                    
+                    let birthYearValue = currentYear - age;
+                    
+                    // If we have both month and day selected, check if birthday has passed this year
+                    if (selectedMonth && selectedDay) {
+                        // If birthday hasn't occurred yet this year, subtract one more year
+                        if (selectedMonth > currentMonth || (selectedMonth === currentMonth && selectedDay > currentDay)) {
+                            birthYearValue = currentYear - age - 1;
+                        }
+                    }
+                    
                     birthYear.value = birthYearValue;
                     populateDays();
                 }
             });
 
-            // Grade level change handler
-            if (gradeSelect) {
-                gradeSelect.addEventListener('change', function() {
-                    const selectedGrade = parseInt(this.value);
+            // Update age when birthdate is selected
+            function updateAgeFromBirthdate() {
+                const birthYearVal = parseInt(birthYear.value);
+                const birthMonthVal = parseInt(birthMonth.value);
+                const birthDayVal = parseInt(birthDay.value);
+                
+                if (birthYearVal && birthMonthVal && birthDayVal) {
+                    const today = new Date();
+                    const currentYear = today.getFullYear();
+                    const currentMonth = today.getMonth() + 1;
+                    const currentDay = today.getDate();
                     
-                    if (selectedGrade === 11 || selectedGrade === 12) {
-                        if (strandPicker) strandPicker.style.display = 'block';
-                        if (strandSelect) strandSelect.required = true;
-                    } else {
-                        if (strandPicker) strandPicker.style.display = 'none';
-                        if (strandSelect) {
-                            strandSelect.required = false;
-                            strandSelect.value = '';
-                        }
+                    let age = currentYear - birthYearVal;
+                    
+                    // Subtract 1 if birthday hasn't occurred yet this year
+                    if (birthMonthVal > currentMonth || (birthMonthVal === currentMonth && birthDayVal > currentDay)) {
+                        age--;
                     }
-                });
+                    
+                    if (age > 0 && age < 120) {
+                        ageInput.value = age;
+                    }
+                }
             }
+
+            birthMonth.addEventListener('change', updateAgeFromBirthdate);
+            birthDay.addEventListener('change', updateAgeFromBirthdate);
+            birthYear.addEventListener('input', updateAgeFromBirthdate);
 
             // Initialize file list
             if (fileList) {
@@ -754,6 +1076,26 @@ if (isset($_SESSION['user_id'])) {
                     errorDiv.classList.remove('show');
                 }
 
+                // Validate first name and last name
+                const firstName = document.getElementById('firstName').value.trim();
+                const lastName = document.getElementById('lastName').value.trim();
+                
+                if (!firstName) {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'Please enter your first name.';
+                        errorDiv.classList.add('show');
+                    }
+                    return;
+                }
+                
+                if (!lastName) {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'Please enter your last name.';
+                        errorDiv.classList.add('show');
+                    }
+                    return;
+                }
+
                 // Validate file upload
                 if (fileInput.files.length === 0) {
                     if (errorDiv) {
@@ -812,9 +1154,22 @@ if (isset($_SESSION['user_id'])) {
                     return;
                 }
 
+                // Combine name fields into full name for submission
+                const middleName = document.getElementById('middleName').value.trim();
+                const suffix = document.getElementById('suffix').value;
+                
+                let fullName = `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`;
+                if (suffix) {
+                    fullName += `, ${suffix}`;
+                }
+
                 // Create FormData for file upload
                 const formData = new FormData();
-                formData.append('fullName', document.getElementById('fullName').value);
+                formData.append('fullName', fullName);
+                formData.append('firstName', firstName);
+                formData.append('middleName', middleName);
+                formData.append('lastName', lastName);
+                formData.append('suffix', suffix);
                 formData.append('age', document.getElementById('age').value);
                 formData.append('gender', document.getElementById('gender').value);
                 const birthdate = `${birthYear.value}-${birthMonth.value}-${birthDay.value}`;
@@ -868,7 +1223,102 @@ if (isset($_SESSION['user_id'])) {
             });
         });
 
-        // Define showEnrollment function globally
+        // Terms and Conditions Functions
+        function showRequirements() {
+            const gradeLevel = document.getElementById('reqGradeLevel').value;
+            const requirementsDisplay = document.getElementById('requirementsDisplay');
+            const requirementsList = document.getElementById('requirementsList');
+            
+            if (!gradeLevel) {
+                requirementsDisplay.style.display = 'none';
+                return;
+            }
+            
+            requirementsList.innerHTML = '';
+            
+            // Junior High School Requirements (Grades 7-10)
+            const jhsRequirements = [
+                'PSA Birth Certificate (Original and Photocopy)',
+                '2x2 ID Pictures (2 pieces, white background)',
+                'Report Card / Form 138 (Original) from previous school',
+                'Good Moral Certificate from previous school',
+                'Photocopy of Parent/Guardian Valid ID',
+                'Completed Enrollment Form',
+                'Proof of Payment for Enrollment Fee'
+            ];
+            
+            // Senior High School Requirements (Grades 11-12)
+            const shsRequirements = [
+                'PSA Birth Certificate (Original and Photocopy)',
+                '2x2 ID Pictures (2 pieces, white background)',
+                'Report Card / Form 138 (Original) from Junior High School',
+                'Certificate of Completion from Grade 10',
+                'Good Moral Certificate from Junior High School',
+                'ESC Certificate (if applicable)',
+                'Voucher Certificate (if applicable)',
+                'Photocopy of Parent/Guardian Valid ID',
+                'Completed Enrollment Form',
+                'Proof of Payment for Enrollment Fee',
+                'Choice of Strand (STEM, ABM, HUMSS)'
+            ];
+            
+            let requirements = [];
+            let gradeText = '';
+            
+            if (gradeLevel >= 7 && gradeLevel <= 10) {
+                requirements = jhsRequirements;
+                gradeText = 'Junior High School (Grade ' + gradeLevel + ')';
+            } else if (gradeLevel >= 11 && gradeLevel <= 12) {
+                requirements = shsRequirements;
+                gradeText = 'Senior High School (Grade ' + gradeLevel + ')';
+            }
+            
+            requirements.forEach(req => {
+                const li = document.createElement('li');
+                li.textContent = req;
+                requirementsList.appendChild(li);
+            });
+            
+            const header = requirementsDisplay.querySelector('h4');
+            if (header) {
+                header.textContent = 'Required Documents for ' + gradeText + ':';
+            }
+            
+            requirementsDisplay.style.display = 'block';
+        }
+
+        function proceedToEnrollmentForm() {
+            const agreeCheckbox = document.getElementById('agreeTerms');
+            const gradeLevel = document.getElementById('reqGradeLevel').value;
+            
+            if (!agreeCheckbox.checked) {
+                alert('Please agree to the Terms and Conditions to proceed.');
+                return;
+            }
+            
+            if (!gradeLevel) {
+                alert('Please select your grade level to view the requirements.');
+                return;
+            }
+            
+            document.getElementById('termsOverlay').style.display = 'none';
+            document.getElementById('enrollmentForm').style.display = 'block';
+            
+            const gradeSelect = document.getElementById('grade');
+            if (gradeSelect) {
+                gradeSelect.value = gradeLevel;
+                if (gradeLevel >= 11) {
+                    document.getElementById('strandPicker').style.display = 'block';
+                    document.getElementById('strand').required = true;
+                }
+            }
+        }
+
+        function backToTerms() {
+            document.getElementById('enrollmentForm').style.display = 'none';
+            document.getElementById('termsOverlay').style.display = 'flex';
+        }
+
         function showEnrollment() {
             const landingPage = document.getElementById('landingPage');
             const loginPage = document.getElementById('loginPage');
@@ -879,6 +1329,43 @@ if (isset($_SESSION['user_id'])) {
             if (loginPage) loginPage.style.display = 'none';
             if (enrollmentPage) enrollmentPage.style.display = 'block';
             if (dashboardPage) dashboardPage.style.display = 'none';
+            
+            const termsOverlay = document.getElementById('termsOverlay');
+            const enrollmentForm = document.getElementById('enrollmentForm');
+            const enrollmentSuccess = document.getElementById('enrollmentSuccess');
+            const reqGradeSelect = document.getElementById('reqGradeLevel');
+            const requirementsDisplay = document.getElementById('requirementsDisplay');
+            const agreeCheckbox = document.getElementById('agreeTerms');
+            const proceedBtn = document.getElementById('proceedBtn');
+            
+            if (termsOverlay) {
+                termsOverlay.style.display = 'flex';
+                termsOverlay.style.flexDirection = 'column';
+            }
+            if (enrollmentForm) enrollmentForm.style.display = 'none';
+            if (enrollmentSuccess) enrollmentSuccess.classList.remove('show');
+            if (reqGradeSelect) reqGradeSelect.value = '';
+            if (requirementsDisplay) requirementsDisplay.style.display = 'none';
+            if (agreeCheckbox) agreeCheckbox.checked = false;
+            if (proceedBtn) proceedBtn.disabled = true;
+        }
+
+        function handleGradeChange() {
+            const gradeSelect = document.getElementById('grade');
+            const strandPicker = document.getElementById('strandPicker');
+            const strandSelect = document.getElementById('strand');
+            const selectedGrade = parseInt(gradeSelect.value);
+            
+            if (selectedGrade === 11 || selectedGrade === 12) {
+                if (strandPicker) strandPicker.style.display = 'block';
+                if (strandSelect) strandSelect.required = true;
+            } else {
+                if (strandPicker) strandPicker.style.display = 'none';
+                if (strandSelect) {
+                    strandSelect.required = false;
+                    strandSelect.value = '';
+                }
+            }
         }
 
         function removeEnrollmentFile(index) {
@@ -922,19 +1409,83 @@ if (isset($_SESSION['user_id'])) {
         }
 
         function backFromEnrollment() {
-        const form = document.getElementById('enrollmentForm');
-        const success = document.getElementById('enrollmentSuccess');
+            const form = document.getElementById('enrollmentForm');
+            const success = document.getElementById('enrollmentSuccess');
+            const termsOverlay = document.getElementById('termsOverlay');
+            const reqGradeSelect = document.getElementById('reqGradeLevel');
+            const requirementsDisplay = document.getElementById('requirementsDisplay');
+            const agreeCheckbox = document.getElementById('agreeTerms');
+            const proceedBtn = document.getElementById('proceedBtn');
+            const fileInput = document.getElementById('enrollDocuments');
 
-        if (form) {
-            form.style.display = 'block';
-            form.reset();
+            if (form) {
+                form.style.display = 'none';
+                form.reset();
+                
+                const fileList = document.getElementById('fileList');
+                if (fileList) {
+                    fileList.innerHTML = '<p style="color: #999; margin: 0;">No files selected</p>';
+                }
+                
+                const strandPicker = document.getElementById('strandPicker');
+                if (strandPicker) {
+                    strandPicker.style.display = 'none';
+                }
+                
+                const birthYear = document.getElementById('birthYear');
+                if (birthYear) {
+                    birthYear.value = '';
+                }
+                
+                const birthDay = document.getElementById('birthDay');
+                if (birthDay) {
+                    birthDay.innerHTML = '<option value="">Day</option>';
+                }
+                
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+            }
+
+            if (success) {
+                success.classList.remove('show');
+            }
+            
+            if (termsOverlay) {
+                termsOverlay.style.display = 'flex';
+                termsOverlay.style.flexDirection = 'column';
+            }
+            if (reqGradeSelect) reqGradeSelect.value = '';
+            if (requirementsDisplay) requirementsDisplay.style.display = 'none';
+            if (agreeCheckbox) agreeCheckbox.checked = false;
+            if (proceedBtn) proceedBtn.disabled = true;
+            
+            showLanding();
         }
 
-        if (success) {
-            success.classList.remove('show');
+        function showLanding() {
+            const landingPage = document.getElementById('landingPage');
+            const loginPage = document.getElementById('loginPage');
+            const enrollmentPage = document.getElementById('enrollmentPage');
+            const dashboardPage = document.getElementById('dashboardPage');
+            
+            if (landingPage) landingPage.style.display = 'block';
+            if (loginPage) loginPage.style.display = 'none';
+            if (enrollmentPage) enrollmentPage.style.display = 'none';
+            if (dashboardPage) dashboardPage.style.display = 'none';
         }
-        showLanding();
-    }
+
+        function showLogin() {
+            const landingPage = document.getElementById('landingPage');
+            const loginPage = document.getElementById('loginPage');
+            const enrollmentPage = document.getElementById('enrollmentPage');
+            const dashboardPage = document.getElementById('dashboardPage');
+            
+            if (landingPage) landingPage.style.display = 'none';
+            if (loginPage) loginPage.style.display = 'block';
+            if (enrollmentPage) enrollmentPage.style.display = 'none';
+            if (dashboardPage) dashboardPage.style.display = 'none';
+        }
     </script>
 </body>
 </html>
