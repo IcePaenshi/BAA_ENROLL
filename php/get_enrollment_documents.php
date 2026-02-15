@@ -54,61 +54,155 @@ try {
     $validDocuments = [];
     $studentName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $enrollment['full_name']);
     
-    foreach ($documents as $doc) {
-        $filename = basename($doc['document_path']);
-        $found = false;
-        
-        // Try the exact stored path first
-        $fullPath = $baseDir . '/' . $doc['document_path'];
-        if (file_exists($fullPath)) {
-            $validDocuments[] = $doc;
-            $found = true;
-        }
-        
-        // If not found, search in all subdirectories matching the student name
-        if (!$found && is_dir($enrollmentsDir)) {
+    // If no documents in database, check the filesystem directly
+    if (empty($documents)) {
+        // Look for directories that might contain files for this enrollment
+        if (is_dir($enrollmentsDir)) {
             $dirs = scandir($enrollmentsDir);
             foreach ($dirs as $dir) {
                 if ($dir === '.' || $dir === '..' || !is_dir($enrollmentsDir . '/' . $dir)) {
                     continue;
                 }
                 
-                // Check if directory name starts with the student name
-                if (strpos($dir, $studentName) === 0) {
-                    $filePath = $enrollmentsDir . '/' . $dir . '/' . $filename;
-                    if (file_exists($filePath)) {
-                        // Update the path for the response
-                        $doc['document_path'] = 'enrollments/' . $dir . '/' . $filename;
-                        $validDocuments[] = $doc;
-                        $found = true;
-                        break;
+                // Check if directory name starts with the student name or contains the enrollment ID
+                if (strpos($dir, $studentName) === 0 || strpos($dir, (string)$enrollmentId) !== false) {
+                    $studentDir = $enrollmentsDir . '/' . $dir;
+                    $files = scandir($studentDir);
+                    
+                    foreach ($files as $file) {
+                        if ($file === '.' || $file === '..' || is_dir($studentDir . '/' . $file)) {
+                            continue;
+                        }
+                        
+                        // Determine document type from filename
+                        $docType = 'Document';
+                        $lowerFile = strtolower($file);
+                        
+                        if (strpos($lowerFile, 'birth') !== false || strpos($lowerFile, 'birthcert') !== false) {
+                            $docType = 'Birth Certificate';
+                        } elseif (strpos($lowerFile, 'grade') !== false || strpos($lowerFile, 'report') !== false) {
+                            $docType = 'Grade Report';
+                        } elseif (strpos($lowerFile, 'good') !== false || strpos($lowerFile, 'moral') !== false) {
+                            $docType = 'Good Moral Character';
+                        } elseif (strpos($lowerFile, 'id') !== false || strpos($lowerFile, 'picture') !== false || strpos($lowerFile, 'photo') !== false) {
+                            $docType = 'ID Picture';
+                        } elseif (strpos($lowerFile, 'form') !== false || strpos($lowerFile, 'enrollment') !== false) {
+                            $docType = 'Enrollment Form';
+                        } elseif (strpos($lowerFile, 'psa') !== false) {
+                            $docType = 'PSA Birth Certificate';
+                        } elseif (strpos($lowerFile, 'report') !== false || strpos($lowerFile, 'card') !== false) {
+                            $docType = 'Report Card';
+                        }
+                        
+                        $filePath = 'enrollments/' . $dir . '/' . $file;
+                        $fileSize = filesize($studentDir . '/' . $file);
+                        
+                        $validDocuments[] = [
+                            'id' => count($validDocuments) + 1,
+                            'enrollment_id' => $enrollmentId,
+                            'document_filename' => $file,
+                            'document_path' => $filePath,
+                            'document_type' => $docType,
+                            'file_size' => $fileSize,
+                            'created_at' => date('Y-m-d H:i:s', filemtime($studentDir . '/' . $file))
+                        ];
+                    }
+                }
+            }
+        }
+    } else {
+        // Process database documents
+        foreach ($documents as $doc) {
+            $filename = basename($doc['document_path']);
+            $found = false;
+            
+            // Try the exact stored path first
+            $fullPath = $baseDir . '/' . $doc['document_path'];
+            if (file_exists($fullPath)) {
+                // Determine document type from filename
+                $docType = 'Document';
+                $lowerFile = strtolower($doc['document_filename']);
+                
+                if (strpos($lowerFile, 'birth') !== false || strpos($lowerFile, 'birthcert') !== false) {
+                    $docType = 'Birth Certificate';
+                } elseif (strpos($lowerFile, 'grade') !== false || strpos($lowerFile, 'report') !== false) {
+                    $docType = 'Grade Report';
+                } elseif (strpos($lowerFile, 'good') !== false || strpos($lowerFile, 'moral') !== false) {
+                    $docType = 'Good Moral Character';
+                } elseif (strpos($lowerFile, 'id') !== false || strpos($lowerFile, 'picture') !== false) {
+                    $docType = 'ID Picture';
+                } elseif (strpos($lowerFile, 'form') !== false) {
+                    $docType = 'Enrollment Form';
+                }
+                
+                $doc['document_type'] = $docType;
+                $validDocuments[] = $doc;
+                $found = true;
+            }
+            
+            // If not found, search in all subdirectories matching the student name
+            if (!$found && is_dir($enrollmentsDir)) {
+                $dirs = scandir($enrollmentsDir);
+                foreach ($dirs as $dir) {
+                    if ($dir === '.' || $dir === '..' || !is_dir($enrollmentsDir . '/' . $dir)) {
+                        continue;
+                    }
+                    
+                    // Check if directory name starts with the student name
+                    if (strpos($dir, $studentName) === 0) {
+                        $filePath = $enrollmentsDir . '/' . $dir . '/' . $filename;
+                        if (file_exists($filePath)) {
+                            // Update the path for the response
+                            $doc['document_path'] = 'enrollments/' . $dir . '/' . $filename;
+                            
+                            // Determine document type from filename
+                            $docType = 'Document';
+                            $lowerFile = strtolower($doc['document_filename']);
+                            
+                            if (strpos($lowerFile, 'birth') !== false || strpos($lowerFile, 'birthcert') !== false) {
+                                $docType = 'Birth Certificate';
+                            } elseif (strpos($lowerFile, 'grade') !== false || strpos($lowerFile, 'report') !== false) {
+                                $docType = 'Grade Report';
+                            } elseif (strpos($lowerFile, 'good') !== false || strpos($lowerFile, 'moral') !== false) {
+                                $docType = 'Good Moral Character';
+                            } elseif (strpos($lowerFile, 'id') !== false || strpos($lowerFile, 'picture') !== false) {
+                                $docType = 'ID Picture';
+                            } elseif (strpos($lowerFile, 'form') !== false) {
+                                $docType = 'Enrollment Form';
+                            }
+                            
+                            $doc['document_type'] = $docType;
+                            $validDocuments[] = $doc;
+                            $found = true;
+                            break;
+                        }
                     }
                 }
             }
         }
     }
     
-    // Debug: Log what we're returning
-    error_log("Enrollment $enrollmentId: Found " . count($validDocuments) . " documents");
-    foreach ($validDocuments as $doc) {
-        error_log("  - " . $doc['document_filename'] . " @ " . $doc['document_path']);
+    // Output the JSON response
+    header('Content-Type: application/json');
+    if (empty($validDocuments)) {
+        echo json_encode([
+            'success' => true, 
+            'documents' => [],
+            'message' => 'No documents found for this enrollment'
+        ]);
+    } else {
+        echo json_encode([
+            'success' => true, 
+            'documents' => $validDocuments,
+            'count' => count($validDocuments)
+        ]);
     }
     
+} catch (PDOException $e) {
     header('Content-Type: application/json');
-    echo json_encode([
-        'success' => true,
-        'documents' => $validDocuments,
-        'debug' => [
-            'enrollment_id' => $enrollmentId,
-            'student_name' => $enrollment['full_name'] ?? 'N/A',
-            'total_documents' => count($validDocuments)
-        ]
-    ]);
-} catch(PDOException $e) {
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+} catch (Exception $e) {
     header('Content-Type: application/json');
-    echo json_encode([
-        'success' => false,
-        'message' => 'Database error: ' . $e->getMessage()
-    ]);
+    echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
 }
 ?>

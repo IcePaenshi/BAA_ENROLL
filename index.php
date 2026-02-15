@@ -730,6 +730,11 @@ if (isset($_SESSION['user_id'])) {
                         <div class="proceed-btn-container">
                             <button type="button" class="proceed-btn" id="proceedBtn" onclick="proceedToEnrollmentForm()" disabled>Proceed to Enrollment Form</button>
                         </div>
+                        
+                        <!-- Back to Home Button at the bottom of requirements tab -->
+                        <div class="back-to-landing" style="margin-top: 15px;">
+                            <a href="#" onclick="backFromEnrollment(); return false;">← Back to Home</a>
+                        </div>
                     </div>
 
                     <!-- Enrollment Form -->

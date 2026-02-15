@@ -146,6 +146,17 @@ try {
     error_log("Error fetching events: " . $e->getMessage());
     $events = [];
 }
+
+// Get total enrollment count
+$totalEnrollments = 0;
+if (in_array($userRole, ['admin', 'super_admin'])) {
+    try {
+        $countStmt = $pdo->query("SELECT COUNT(*) FROM enrollments");
+        $totalEnrollments = $countStmt->fetchColumn();
+    } catch (PDOException $e) {
+        error_log("Error counting enrollments: " . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -155,7 +166,7 @@ try {
     <title>Baesa Adventist Academy - Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        /* ========== CENTERING FIXES ========== */
+
         .dashboard-main {
             width: 100%;
             max-width: 100%;
@@ -203,7 +214,7 @@ try {
             padding: 30px;
         }
 
-        /* ========== COMMON STYLES ========== */
+        /* COMMON STYLES */
         .profile-card .profile-info {
             background: #f8f9fa;
             padding: 30px;
@@ -890,9 +901,501 @@ try {
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
-        /* Remove emojis from buttons */
-        .payments-card .btn::before {
+        /* Modal Styles */
+        .modal-overlay {
             display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-container {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .modal-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #0a2d63;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .modal-body {
+            padding: 25px;
+        }
+
+        .modal-footer {
+            padding: 20px 25px;
+            border-top: 1px solid #e0e0e0;
+            text-align: right;
+            background: #f8f9fa;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .modal-footer button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .modal-footer .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .modal-footer .btn-cancel:hover {
+            background: #5a6268;
+        }
+
+        .modal-footer .btn-confirm {
+            background: #0a2d63;
+            color: white;
+        }
+
+        .modal-footer .btn-confirm:hover {
+            background: #08306b;
+        }
+
+        .modal-footer .btn-delete {
+            background: #dc2626;
+            color: white;
+        }
+
+        .modal-footer .btn-delete:hover {
+            background: #b91c1c;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333;
+            background: white;
+            transition: border 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #0a2d63;
+            box-shadow: 0 0 0 2px rgba(10, 45, 99, 0.1);
+        }
+
+        .student-fields {
+            display: none;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: auto;
+            margin-right: 5px;
+        }
+
+        .search-results {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+
+        .search-result-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .search-result-item:hover {
+            background: #f0f2f5;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-result-item .user-name {
+            font-weight: 600;
+            color: #0a2d63;
+            margin-bottom: 3px;
+        }
+
+        .search-result-item .user-details {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .search-result-item .user-role {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .role-badge-student { background: #6c757d; color: white; }
+        .role-badge-teacher { background: #10b981; color: white; }
+        .role-badge-admin { background: #0a2d63; color: white; }
+        .role-badge-super_admin { background: #7c3aed; color: white; }
+
+        .user-delete-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .user-delete-item:last-child {
+            border-bottom: none;
+        }
+
+        .delete-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .filter-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .filter-section h4 {
+            margin: 0 0 10px 0;
+            color: #0a2d63;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .sort-options {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .sort-option {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .sort-option:hover {
+            background: #e0e0e0;
+        }
+
+        .sort-option.active {
+            background: #0a2d63;
+            color: white;
+            border-color: #0a2d63;
+        }
+
+        /* Document Modal Styling */
+        .document-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .document-item {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px 15px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .document-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .document-icon {
+            font-size: 14px !important;
+            font-weight: bold;
+            color: #0a2d63;
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: inline-block;
+            margin: 0 auto 15px auto;
+            width: fit-content;
+            font-family: monospace;
+            letter-spacing: 0.5px;
+        }
+
+        .document-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            word-break: break-word;
+            font-size: 16px;
+        }
+
+        .document-type {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            word-break: break-word;
+            background: #f1f3f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .document-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .document-btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.2s;
+        }
+
+        .btn-view {
+            background: #0a2d63;
+            color: white;
+        }
+
+        .btn-view:hover {
+            background: #08306b;
+        }
+
+        .btn-download {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-download:hover {
+            background: #218838;
+        }
+
+        /* Enrollment Controls */
+        .enrollment-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .enrollment-stats {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .enrollment-count {
+            background: #0a2d63;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .search-enrollment-btn {
+            background: #0a2d63;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .search-enrollment-btn:hover {
+            background: #08306b;
+        }
+
+        /* Pagination Controls */
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pagination-controls select {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .pagination-buttons {
+            display: flex;
+            gap: 5px;
+            margin-left: auto;
+        }
+
+        .pagination-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .pagination-btn:hover {
+            background: #e9ecef;
+        }
+
+        .pagination-btn.active {
+            background: #0a2d63;
+            color: white;
+            border-color: #0a2d63;
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            color: #666;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .custom-per-page {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .custom-per-page input {
+            width: 60px;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .custom-per-page button {
+            padding: 6px 12px;
+            background: #0a2d63;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .custom-per-page button:hover {
+            background: #08306b;
         }
     </style>
 </head>
@@ -939,13 +1442,17 @@ try {
                             <div class="date"><?php echo $currentDate; ?></div>
                         </div>
                     </div>
-                    
+        
                     <div class="header-center">
                         <h2>Welcome to Your Dashboard</h2>
                         <p>Stay updated with your academic progress and school activities</p>
                     </div>
-                    
+        
                     <div class="header-right">
+                        <!-- Search Icon Button -->
+                        <button onclick="openSearchModal()" style="background: transparent; border: none; cursor: pointer; margin-right: 15px; display: flex; align-items: center;">
+                            <img src="images/search_icon.png" alt="Search" style="width: 24px; height: 24px;">
+                        </button>
                         <div class="user-info-container">
                             <span class="user-name" id="userName"><?php echo htmlspecialchars($fullName); ?></span>
                             <button class="logout-btn" onclick="window.location.href='php/logout.php'">Logout</button>
@@ -961,13 +1468,42 @@ try {
                         <!-- Admin Enrollments Dashboard -->
                         <div class="dashboard-card grades-card active" id="adminEnrollmentCard">
                             <div class="card-content">
-                                <h3>Student Enrollment Requests</h3>
+                                <div class="enrollment-controls">
+                                    <div class="enrollment-stats">
+                                        <h3>Student Access Requests</h3>
+                                        <span class="enrollment-count" id="enrollmentCount">Total Number of Enrolees: <?php echo $totalEnrollments; ?></span>
+                                    </div>
+                                    <button class="search-enrollment-btn" onclick="openEnrollmentSearchModal()">
+                                        Search Enrollees
+                                    </button>
+                                </div>
                                 <p>Review and manage pending student enrollments</p>
                                 
                                 <div id="enrollmentList">
                                     <div style="text-align: center; color: #999; padding: 40px 20px;">
                                         Loading enrollments...
                                     </div>
+                                </div>
+
+                                <!-- Pagination Controls -->
+                                <div id="enrollmentPagination" class="pagination-controls" style="display: none;">
+                                    <div class="custom-per-page">
+                                        <span>Show:</span>
+                                        <select id="perPageSelect" onchange="changePerPage()">
+                                            <option value="10">10</option>
+                                            <option value="25">25</option>
+                                            <option value="50">50</option>
+                                            <option value="75">75</option>
+                                            <option value="100">100</option>
+                                            <option value="custom">Custom</option>
+                                        </select>
+                                        <div id="customPerPageInput" style="display: none;">
+                                            <input type="number" id="customPerPage" min="1" max="500" placeholder="Number">
+                                            <button onclick="applyCustomPerPage()">Apply</button>
+                                        </div>
+                                    </div>
+                                    <div class="pagination-info" id="paginationInfo"></div>
+                                    <div class="pagination-buttons" id="paginationButtons"></div>
                                 </div>
                             </div>
                         </div>
@@ -976,80 +1512,16 @@ try {
                         <div class="dashboard-card users-card" id="usersCard">
                             <div class="card-content">
                                 <h3>User Management</h3>
-                                <p>Manage user accounts - create and view users</p>
+                                <p>Manage user accounts - add and delete users</p>
 
-                                <!-- Create User Form -->
-                                <div class="user-form-container">
-                                    <h4>Create New User</h4>
-                                    <form id="createUserForm" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                                        <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Username *</label>
-                                            <input type="text" name="username" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Email *</label>
-                                            <input type="email" name="email" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Password *</label>
-                                            <input type="password" name="password" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Full Name *</label>
-                                            <input type="text" name="fullName" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Role *</label>
-                                            <select name="role" id="roleSelect" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="toggleStudentFields()">
-                                                <option value="">Select Role</option>
-                                                <option value="student">Student</option>
-                                                <option value="teacher">Teacher</option>
-                                                <?php if ($userRole == 'super_admin'): ?>
-                                                <option value="admin">Admin</option>
-                                                <?php endif; ?>
-                                            </select>
-                                        </div>
-                                        
-                                        <!-- Student-specific fields (hidden by default) -->
-                                        <div id="studentFields" style="display: none; grid-column: span 2;">
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
-                                                <div>
-                                                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Grade Level *</label>
-                                                    <select name="gradeLevel" id="gradeLevel" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="updateSections()">
-                                                        <option value="">Select Grade Level</option>
-                                                        <option value="Grade 7">Grade 7</option>
-                                                        <option value="Grade 8">Grade 8</option>
-                                                        <option value="Grade 9">Grade 9</option>
-                                                        <option value="Grade 10">Grade 10</option>
-                                                        <option value="Grade 11">Grade 11</option>
-                                                        <option value="Grade 12">Grade 12</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Section *</label>
-                                                    <select name="section" id="sectionSelect" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                                        <option value="">Select Section</option>
-                                                    </select>
-                                                </div>
-                                                <div style="grid-column: span 2;">
-                                                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">LRN *</label>
-                                                    <input type="text" name="lrn" id="lrnField" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div style="grid-column: span 2; text-align: right;">
-                                            <button type="submit" style="background: #0a2d63; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">Create User</button>
-                                        </div>
-                                    </form>
-                                </div>
-
-                                <!-- Show Users Button -->
-                                <div style="margin-bottom: 20px; text-align: center;">
-                                    <button id="showUsersBtn" style="background: #0a2d63; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">Show All Users</button>
-                                </div>
-
-                                <div id="userList" style="width: 100%; display: none;">
+                                <!-- User Management Actions -->
+                                <div style="display: flex; gap: 30px; margin-top: 50px; justify-content: center;">
+                                    <button onclick="openAddUserModal()" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                                        Add User
+                                    </button>
+                                    <button onclick="openDeleteUserModal()" style="background: #dc2626; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                                        Delete User
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1174,6 +1646,289 @@ try {
                                         <span class="label">Email:</span>
                                         <span class="value"><?php echo htmlspecialchars($user['email'] ?? 'N/A'); ?></span>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Add User Modal -->
+                        <div id="addUserModal" class="modal-overlay">
+                            <div class="modal-container">
+                                <div class="modal-header">
+                                    <h3>Add New User</h3>
+                                    <button class="modal-close" onclick="closeAddUserModal()">×</button>
+                                </div>
+                                <div class="modal-body">
+                                    <form id="createUserForm">
+                                        <div class="form-group">
+                                            <label>Username *</label>
+                                            <input type="text" name="username" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Email *</label>
+                                            <input type="email" name="email" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Password *</label>
+                                            <input type="password" name="password" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Full Name *</label>
+                                            <input type="text" name="fullName" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Role *</label>
+                                            <select name="role" id="modalRoleSelect" onchange="toggleModalStudentFields()" required>
+                                                <option value="">Select Role</option>
+                                                <option value="student">Student</option>
+                                                <option value="teacher">Teacher</option>
+                                                <?php if ($userRole == 'super_admin'): ?>
+                                                <option value="admin">Admin</option>
+                                                <?php endif; ?>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Student-specific fields -->
+                                        <div id="modalStudentFields" class="student-fields">
+                                            <div class="form-group">
+                                                <label>Grade Level *</label>
+                                                <select name="gradeLevel" id="modalGradeLevel" onchange="updateModalSections()">
+                                                    <option value="">Select Grade Level</option>
+                                                    <option value="Grade 7">Grade 7</option>
+                                                    <option value="Grade 8">Grade 8</option>
+                                                    <option value="Grade 9">Grade 9</option>
+                                                    <option value="Grade 10">Grade 10</option>
+                                                    <option value="Grade 11">Grade 11</option>
+                                                    <option value="Grade 12">Grade 12</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Section *</label>
+                                                <select name="section" id="modalSectionSelect">
+                                                    <option value="">Select Section</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>LRN *</label>
+                                                <input type="text" name="lrn" id="modalLrnField">
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn-cancel" onclick="closeAddUserModal()">Cancel</button>
+                                    <button class="btn-confirm" onclick="submitAddUser()">Add User</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Search Users Modal -->
+                        <div id="searchUserModal" class="modal-overlay">
+                            <div class="modal-container" style="max-width: 700px;">
+                                <div class="modal-header">
+                                    <h3>Search Users</h3>
+                                    <button class="modal-close" onclick="closeSearchModal()">×</button>
+                                </div>
+                                <div class="modal-body">
+                                    <!-- Search Input -->
+                                    <div class="form-group">
+                                        <label>Search by name, email, or username</label>
+                                        <input type="text" id="searchInput" placeholder="Type to search..." onkeyup="performSearch()">
+                                    </div>
+
+                                    <!-- Filters Section -->
+                                    <div class="filter-section">
+                                        <h4>Filter by Role</h4>
+                                        <div class="checkbox-group">
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterStudent" value="student" onchange="applyFilters()">
+                                                <label for="filterStudent">Student</label>
+                                            </div>
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterTeacher" value="teacher" onchange="applyFilters()">
+                                                <label for="filterTeacher">Teacher</label>
+                                            </div>
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterAdmin" value="admin" onchange="applyFilters()">
+                                                <label for="filterAdmin">Admin</label>
+                                            </div>
+                                            <?php if ($userRole == 'super_admin'): ?>
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterSuperAdmin" value="super_admin" onchange="applyFilters()">
+                                                <label for="filterSuperAdmin">Super Admin</label>
+                                            </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+
+                                    <div class="filter-section">
+                                        <h4>Filter by Grade Level</h4>
+                                        <div class="form-group" style="margin-bottom: 10px;">
+                                            <select id="filterGradeLevel" onchange="updateFilterSections(); applyFilters();">
+                                                <option value="">All Grade Levels</option>
+                                                <option value="Grade 7">Grade 7</option>
+                                                <option value="Grade 8">Grade 8</option>
+                                                <option value="Grade 9">Grade 9</option>
+                                                <option value="Grade 10">Grade 10</option>
+                                                <option value="Grade 11">Grade 11</option>
+                                                <option value="Grade 12">Grade 12</option>
+                                            </select>
+                                        </div>
+                                        <div id="filterSectionContainer" style="display: none;">
+                                            <label>Section</label>
+                                            <select id="filterSection" onchange="applyFilters()">
+                                                <option value="">All Sections</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="filter-section">
+                                        <h4>Sort By</h4>
+                                        <div class="sort-options">
+                                            <span class="sort-option active" onclick="setSort('name')" id="sort-name">Name</span>
+                                            <span class="sort-option" onclick="setSort('role')" id="sort-role">Role</span>
+                                            <span class="sort-option" onclick="setSort('grade')" id="sort-grade">Grade Level</span>
+                                            <span class="sort-option" onclick="setSort('date')" id="sort-date">Date Joined</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Search Results -->
+                                    <div id="searchResults" class="search-results">
+                                        <div style="text-align: center; padding: 40px; color: #666;">
+                                            Start typing to search for users
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn-cancel" onclick="closeSearchModal()">Close</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Enrollment Search Modal -->
+                        <div id="enrollmentSearchModal" class="modal-overlay">
+                            <div class="modal-container" style="max-width: 700px;">
+                                <div class="modal-header">
+                                    <h3>Search Enrollees</h3>
+                                    <button class="modal-close" onclick="closeEnrollmentSearchModal()">×</button>
+                                </div>
+                                <div class="modal-body">
+                                    <!-- Search Input -->
+                                    <div class="form-group">
+                                        <label>Search by name, email, or phone</label>
+                                        <input type="text" id="enrollmentSearchInput" placeholder="Type to search..." onkeyup="filterEnrollments()">
+                                    </div>
+
+                                    <!-- Status Filters -->
+                                    <div class="filter-section">
+                                        <h4>Filter by Status</h4>
+                                        <div class="checkbox-group">
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterPending" value="pending" onchange="filterEnrollments()" checked>
+                                                <label for="filterPending">Pending</label>
+                                            </div>
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterApproved" value="approved" onchange="filterEnrollments()" checked>
+                                                <label for="filterApproved">Approved</label>
+                                            </div>
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterNeedsDocs" value="needs_docs" onchange="filterEnrollments()" checked>
+                                                <label for="filterNeedsDocs">Needs Documents</label>
+                                            </div>
+                                            <div class="checkbox-item">
+                                                <input type="checkbox" id="filterRejected" value="rejected" onchange="filterEnrollments()" checked>
+                                                <label for="filterRejected">Rejected</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Results Per Page -->
+                                    <div class="filter-section">
+                                        <h4>Results Per Page</h4>
+                                        <div class="custom-per-page" style="margin-top: 10px;">
+                                            <select id="enrollmentPerPage" onchange="changeEnrollmentPerPage()">
+                                                <option value="10">10</option>
+                                                <option value="25">25</option>
+                                                <option value="50">50</option>
+                                                <option value="75">75</option>
+                                                <option value="100">100</option>
+                                                <option value="custom">Custom</option>
+                                            </select>
+                                            <div id="enrollmentCustomPerPage" style="display: none;">
+                                                <input type="number" id="enrollmentCustomNumber" min="1" max="500" placeholder="Number">
+                                                <button onclick="applyEnrollmentCustomPerPage()">Apply</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Search Results -->
+                                    <div id="enrollmentSearchResults" class="search-results" style="max-height: 400px;">
+                                        <div style="text-align: center; padding: 40px; color: #666;">
+                                            Loading enrollments...
+                                        </div>
+                                    </div>
+
+                                    <!-- Pagination for Search Results -->
+                                    <div id="enrollmentSearchPagination" class="pagination-controls" style="margin-top: 15px; display: none;">
+                                        <div class="pagination-info" id="enrollmentSearchInfo"></div>
+                                        <div class="pagination-buttons" id="enrollmentSearchButtons"></div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn-cancel" onclick="closeEnrollmentSearchModal()">Close</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Document View Modal -->
+                        <div id="documentModal" class="modal-overlay">
+                            <div class="modal-container" style="max-width: 800px;">
+                                <div class="modal-header">
+                                    <h3>Student Documents</h3>
+                                    <button class="modal-close" onclick="closeDocumentModal()">×</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div id="documentList" style="min-height: 200px;">
+                                        <div style="text-align: center; padding: 40px; color: #666;">
+                                            Loading documents...
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn-cancel" onclick="closeDocumentModal()">Close</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Delete User Modal -->
+                        <div id="deleteUserModal" class="modal-overlay">
+                            <div class="modal-container" style="max-width: 600px;">
+                                <div class="modal-header">
+                                    <h3>Delete Users</h3>
+                                    <button class="modal-close" onclick="closeDeleteUserModal()">×</button>
+                                </div>
+                                <div class="modal-body">
+                                    <p style="margin-bottom: 20px; color: #666;">Select users to delete. This action cannot be undone.</p>
+                                    
+                                    <!-- Search within delete modal -->
+                                    <div class="form-group">
+                                        <input type="text" id="deleteSearchInput" placeholder="Search users..." onkeyup="loadDeleteUserList()">
+                                    </div>
+
+                                    <!-- User List for Deletion -->
+                                    <div id="deleteUserList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
+                                        <div style="text-align: center; padding: 40px; color: #666;">
+                                            Loading users...
+                                        </div>
+                                    </div>
+
+                                    <!-- Selected Count -->
+                                    <div style="margin-top: 15px; font-size: 14px; color: #666;">
+                                        <span id="selectedCount">0</span> user(s) selected
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn-cancel" onclick="closeDeleteUserModal()">Cancel</button>
+                                    <button class="btn-delete" onclick="confirmDeleteUsers()">Delete Selected</button>
                                 </div>
                             </div>
                         </div>
@@ -1760,6 +2515,7 @@ try {
                     break;
                 case 'users':
                     document.getElementById('usersCard').classList.add('active');
+                    loadUsers();
                     break;
                 case 'payables':
                     document.getElementById('payablesManagementCard').classList.add('active');
@@ -1882,13 +2638,11 @@ try {
                 });
         }
 
-        // ========== ADMIN FUNCTIONS ==========
-        
+        // ADMIN FUNCTIONS
         // Load and display all users
         function loadUsers() {
             const userList = document.getElementById('userList');
-            userList.style.display = 'block';
-            userList.innerHTML = '<div style="text-align: center; padding: 20px;">Loading users...</div>';
+            userList.innerHTML = '<div class="loading">Loading users...</div>';
 
             fetch('php/get_users.php')
                 .then(response => response.json())
@@ -1965,13 +2719,21 @@ try {
             userList.innerHTML = html;
         }
 
-        // Load enrollments for admin
-        function loadEnrollments() {
-            fetch('php/get_enrollments.php')
+        // Load enrollments for admin with pagination
+        let currentPage = 1;
+        let perPage = 10;
+        let totalEnrollments = <?php echo $totalEnrollments; ?>;
+        let allEnrollments = [];
+
+        function loadEnrollments(page = currentPage) {
+            currentPage = page;
+            fetch(`php/get_enrollments.php?page=${currentPage}&per_page=${perPage}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.enrollments) {
-                        displayEnrollments(data.enrollments);
+                        allEnrollments = data.enrollments;
+                        displayEnrollments(allEnrollments);
+                        updatePagination(data.total, data.page, data.per_page);
                     }
                 })
                 .catch(error => console.error('Error loading enrollments:', error));
@@ -2023,6 +2785,344 @@ try {
             });
             
             enrollmentList.innerHTML = html;
+        }
+
+        function updatePagination(total, page, perPage) {
+            const paginationDiv = document.getElementById('enrollmentPagination');
+            const paginationInfo = document.getElementById('paginationInfo');
+            const paginationButtons = document.getElementById('paginationButtons');
+            
+            if (total <= perPage) {
+                paginationDiv.style.display = 'none';
+                return;
+            }
+            
+            paginationDiv.style.display = 'flex';
+            
+            const totalPages = Math.ceil(total / perPage);
+            const start = ((page - 1) * perPage) + 1;
+            const end = Math.min(page * perPage, total);
+            
+            paginationInfo.textContent = `Showing ${start} to ${end} of ${total} enrollments`;
+            
+            let buttonsHtml = '';
+            
+            // Previous button
+            buttonsHtml += `<button class="pagination-btn" onclick="loadEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
+            
+            // Page numbers
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+                    buttonsHtml += `<button class="pagination-btn ${i === page ? 'active' : ''}" onclick="loadEnrollments(${i})">${i}</button>`;
+                } else if (i === page - 3 || i === page + 3) {
+                    buttonsHtml += `<button class="pagination-btn" disabled>...</button>`;
+                }
+            }
+            
+            // Next button
+            buttonsHtml += `<button class="pagination-btn" onclick="loadEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
+            
+            paginationButtons.innerHTML = buttonsHtml;
+        }
+
+        function changePerPage() {
+            const select = document.getElementById('perPageSelect');
+            const customInput = document.getElementById('customPerPageInput');
+            
+            if (select.value === 'custom') {
+                customInput.style.display = 'flex';
+            } else {
+                customInput.style.display = 'none';
+                perPage = parseInt(select.value);
+                currentPage = 1;
+                loadEnrollments(1);
+            }
+        }
+
+        function applyCustomPerPage() {
+            const customValue = document.getElementById('customPerPage').value;
+            if (customValue && customValue > 0) {
+                perPage = parseInt(customValue);
+                currentPage = 1;
+                loadEnrollments(1);
+                document.getElementById('customPerPageInput').style.display = 'none';
+                document.getElementById('perPageSelect').value = 'custom';
+            }
+        }
+
+        // View documents function
+        function viewDocuments(enrollmentId) {
+            if (!enrollmentId) {
+                alert('Invalid enrollment ID');
+                return;
+        }
+    
+                document.getElementById('documentModal').style.display = 'flex';
+                const documentList = document.getElementById('documentList');
+                documentList.innerHTML = '<div class="loading">Loading documents...</div>';
+    
+            fetch(`php/get_enrollment_documents.php?enrollment_id=${enrollmentId}`)
+            .then(response => response.json())
+            .then(data => {
+            console.log('Documents data received:', data); // Debug log
+            
+            if (data.success) {
+                // Check if documents array exists and has items
+                if (data.documents && Array.isArray(data.documents) && data.documents.length > 0) {
+                    let html = '<div class="document-grid">';
+                    
+                    data.documents.forEach(doc => {
+                        // Get filename - check different possible field names
+                        let fileName = doc.document_filename || doc.file_name || 'Document';
+                        let fileExt = '';
+                        
+                        // Safely split filename
+                        if (fileName && typeof fileName === 'string' && fileName.includes('.')) {
+                            fileExt = fileName.split('.').pop().toLowerCase();
+                        }
+                        
+                        // Determine icon based on file extension (text-based)
+                        let icon = '[FILE]'; // Default icon
+                        if (fileExt) {
+                            if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExt)) 
+                                icon = '[IMAGE]';
+                            else if (['pdf'].includes(fileExt)) 
+                                icon = '[PDF]';
+                            else if (['doc', 'docx'].includes(fileExt)) 
+                                icon = '[DOC]';
+                            else if (['xls', 'xlsx', 'csv'].includes(fileExt)) 
+                                icon = '[SPREADSHEET]';
+                            else if (['ppt', 'pptx'].includes(fileExt)) 
+                                icon = '[PRESENTATION]';
+                            else if (['txt', 'rtf'].includes(fileExt)) 
+                                icon = '[TEXT]';
+                            else if (['zip', 'rar', '7z'].includes(fileExt)) 
+                                icon = '[ARCHIVE]';
+                        }
+                        
+                        // Get document type or use filename as fallback
+                        let docType = doc.document_type || 'Document';
+                        
+                        // Get file path - handle different possible field names
+                        let filePath = doc.document_path || doc.file_path || doc.path || '';
+                        
+                        // Make sure the path is correct for viewing
+                        if (filePath && !filePath.startsWith('/') && !filePath.startsWith('http')) {
+                            // Ensure the path is relative to the root
+                            filePath = filePath;
+                        }
+                        
+                        // Format file size
+                        let fileSize = '';
+                        if (doc.file_size) {
+                            let size = parseInt(doc.file_size);
+                            if (size < 1024) {
+                                fileSize = size + ' B';
+                            } else if (size < 1024 * 1024) {
+                                fileSize = (size / 1024).toFixed(1) + ' KB';
+                            } else {
+                                fileSize = (size / (1024 * 1024)).toFixed(1) + ' MB';
+                            }
+                        }
+                        
+                        // Format date
+                        let uploadDate = '';
+                        if (doc.created_at) {
+                            uploadDate = new Date(doc.created_at).toLocaleDateString();
+                        }
+                        
+                        html += `
+                            <div class="document-item">
+                                <div class="document-icon" style="font-size: 14px; font-weight: bold; color: #0a2d63;">${icon}</div>
+                                <div class="document-name">${docType}</div>
+                                <div class="document-type">${fileName}</div>
+                                ${fileSize ? `<div style="font-size: 11px; color: #999; margin-bottom: 10px;">${fileSize}</div>` : ''}
+                                ${uploadDate ? `<div style="font-size: 11px; color: #999; margin-bottom: 10px;">Uploaded: ${uploadDate}</div>` : ''}
+                                <div class="document-actions">
+                                    <a href="${filePath}" target="_blank" class="document-btn btn-view" onclick="if(!this.href) return false;">View</a>
+                                    <a href="${filePath}" download="${fileName}" class="document-btn btn-download" onclick="if(!this.href) return false;">Download</a>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    documentList.innerHTML = html;
+                } else {
+                    documentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No documents uploaded for this enrollment.</div>';
+                }
+            } else {
+                documentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">' + (data.message || 'Error loading documents.') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading documents:', error);
+            documentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;">Error loading documents. Please try again.</div>';
+        });
+}
+
+        function closeDocumentModal() {
+            document.getElementById('documentModal').style.display = 'none';
+        }
+
+        // Enrollment Search Modal Functions
+        function openEnrollmentSearchModal() {
+            document.getElementById('enrollmentSearchModal').style.display = 'flex';
+            filterEnrollments();
+        }
+
+        function closeEnrollmentSearchModal() {
+            document.getElementById('enrollmentSearchModal').style.display = 'none';
+        }
+
+        let enrollmentSearchPage = 1;
+        let enrollmentSearchPerPage = 10;
+
+        function filterEnrollments(page = 1) {
+            enrollmentSearchPage = page;
+            
+            const searchTerm = document.getElementById('enrollmentSearchInput').value.toLowerCase();
+            
+            // Get status filters
+            const filterPending = document.getElementById('filterPending')?.checked || false;
+            const filterApproved = document.getElementById('filterApproved')?.checked || false;
+            const filterNeedsDocs = document.getElementById('filterNeedsDocs')?.checked || false;
+            const filterRejected = document.getElementById('filterRejected')?.checked || false;
+            
+            // Build active status array
+            const activeStatuses = [];
+            if (filterPending) activeStatuses.push('pending');
+            if (filterApproved) activeStatuses.push('approved');
+            if (filterNeedsDocs) activeStatuses.push('needs_docs');
+            if (filterRejected) activeStatuses.push('rejected');
+            
+            // Filter enrollments
+            let filtered = allEnrollments.filter(enrollment => {
+                // Search term filter
+                const matchesSearch = searchTerm === '' || 
+                    enrollment.full_name?.toLowerCase().includes(searchTerm) ||
+                    enrollment.email?.toLowerCase().includes(searchTerm) ||
+                    enrollment.phone?.toLowerCase().includes(searchTerm);
+                
+                if (!matchesSearch) return false;
+                
+                // Status filter
+                if (activeStatuses.length > 0 && !activeStatuses.includes(enrollment.status)) return false;
+                
+                return true;
+            });
+            
+            // Calculate pagination
+            const totalFiltered = filtered.length;
+            const startIndex = (enrollmentSearchPage - 1) * enrollmentSearchPerPage;
+            const endIndex = Math.min(startIndex + enrollmentSearchPerPage, totalFiltered);
+            const paginatedResults = filtered.slice(startIndex, endIndex);
+            
+            displayEnrollmentSearchResults(paginatedResults);
+            updateEnrollmentSearchPagination(totalFiltered, enrollmentSearchPage, enrollmentSearchPerPage);
+        }
+
+        function displayEnrollmentSearchResults(enrollments) {
+            const resultsDiv = document.getElementById('enrollmentSearchResults');
+            
+            if (enrollments.length === 0) {
+                resultsDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No enrollments found matching your criteria.</div>';
+                return;
+            }
+            
+            let html = '';
+            enrollments.forEach(enrollment => {
+                const statusText = enrollment.status ? enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1) : 'Pending';
+                let statusColor = '#6c757d';
+                if (enrollment.status === 'approved') statusColor = '#10b981';
+                if (enrollment.status === 'needs_docs') statusColor = '#f59e0b';
+                if (enrollment.status === 'rejected') statusColor = '#ef4444';
+                
+                html += `
+                    <div class="search-result-item" onclick="viewEnrollmentDetails(${enrollment.id})">
+                        <div class="user-name">${enrollment.full_name}</div>
+                        <div class="user-details">
+                            <span>${enrollment.email}</span>
+                            <span>•</span>
+                            <span>${enrollment.phone}</span>
+                            <span>•</span>
+                            <span style="color: ${statusColor}; font-weight: 600;">${statusText}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            Submitted: ${new Date(enrollment.created_at).toLocaleDateString()}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function updateEnrollmentSearchPagination(total, page, perPage) {
+            const paginationDiv = document.getElementById('enrollmentSearchPagination');
+            const paginationInfo = document.getElementById('enrollmentSearchInfo');
+            const paginationButtons = document.getElementById('enrollmentSearchButtons');
+            
+            if (total <= perPage) {
+                paginationDiv.style.display = 'none';
+                return;
+            }
+            
+            paginationDiv.style.display = 'flex';
+            
+            const totalPages = Math.ceil(total / perPage);
+            const start = ((page - 1) * perPage) + 1;
+            const end = Math.min(page * perPage, total);
+            
+            paginationInfo.textContent = `Showing ${start} to ${end} of ${total} results`;
+            
+            let buttonsHtml = '';
+            
+            // Previous button
+            buttonsHtml += `<button class="pagination-btn" onclick="filterEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
+            
+            // Page numbers
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+                    buttonsHtml += `<button class="pagination-btn ${i === page ? 'active' : ''}" onclick="filterEnrollments(${i})">${i}</button>`;
+                } else if (i === page - 3 || i === page + 3) {
+                    buttonsHtml += `<button class="pagination-btn" disabled>...</button>`;
+                }
+            }
+            
+            // Next button
+            buttonsHtml += `<button class="pagination-btn" onclick="filterEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
+            
+            paginationButtons.innerHTML = buttonsHtml;
+        }
+
+        function changeEnrollmentPerPage() {
+            const select = document.getElementById('enrollmentPerPage');
+            const customInput = document.getElementById('enrollmentCustomPerPage');
+            
+            if (select.value === 'custom') {
+                customInput.style.display = 'flex';
+            } else {
+                customInput.style.display = 'none';
+                enrollmentSearchPerPage = parseInt(select.value);
+                enrollmentSearchPage = 1;
+                filterEnrollments(1);
+            }
+        }
+
+        function applyEnrollmentCustomPerPage() {
+            const customValue = document.getElementById('enrollmentCustomNumber').value;
+            if (customValue && customValue > 0) {
+                enrollmentSearchPerPage = parseInt(customValue);
+                enrollmentSearchPage = 1;
+                filterEnrollments(1);
+                document.getElementById('enrollmentCustomPerPage').style.display = 'none';
+                document.getElementById('enrollmentPerPage').value = 'custom';
+            }
+        }
+
+        function viewEnrollmentDetails(enrollmentId) {
+            closeEnrollmentSearchModal();
         }
 
         // Load students for Payables Management tab
@@ -2344,13 +3444,13 @@ try {
             });
         }
         
-        // Toggle student-specific fields based on role selection
-        function toggleStudentFields() {
-            const roleSelect = document.getElementById('roleSelect');
-            const studentFields = document.getElementById('studentFields');
-            const gradeLevel = document.getElementById('gradeLevel');
-            const sectionSelect = document.getElementById('sectionSelect');
-            const lrnField = document.getElementById('lrnField');
+        // Toggle student-specific fields in modal based on role selection
+        function toggleModalStudentFields() {
+            const roleSelect = document.getElementById('modalRoleSelect');
+            const studentFields = document.getElementById('modalStudentFields');
+            const gradeLevel = document.getElementById('modalGradeLevel');
+            const sectionSelect = document.getElementById('modalSectionSelect');
+            const lrnField = document.getElementById('modalLrnField');
             
             if (roleSelect.value === 'student') {
                 studentFields.style.display = 'block';
@@ -2369,10 +3469,10 @@ try {
             }
         }
 
-        // Update available sections based on selected grade level
-        function updateSections() {
-            const gradeLevel = document.getElementById('gradeLevel').value;
-            const sectionSelect = document.getElementById('sectionSelect');
+        // Update available sections based on selected grade level in modal
+        function updateModalSections() {
+            const gradeLevel = document.getElementById('modalGradeLevel').value;
+            const sectionSelect = document.getElementById('modalSectionSelect');
             
             // Define grade-section mapping
             const gradeSections = {
@@ -2397,6 +3497,392 @@ try {
                 });
             }
         }
+
+        // Update filter sections based on selected grade level
+        function updateFilterSections() {
+            const gradeLevel = document.getElementById('filterGradeLevel').value;
+            const filterSectionContainer = document.getElementById('filterSectionContainer');
+            const sectionSelect = document.getElementById('filterSection');
+            
+            if (gradeLevel) {
+                filterSectionContainer.style.display = 'block';
+                
+                // Define grade-section mapping
+                const gradeSections = {
+                    'Grade 7': ['Love', 'Joy'],
+                    'Grade 8': ['Patience', 'Peace'],
+                    'Grade 9': ['Goodness', 'Kindness'],
+                    'Grade 10': ['Gentleness', 'Faithfulness'],
+                    'Grade 11': ['Self-Control', 'Honesty'],
+                    'Grade 12': ['Humility', 'Meekness']
+                };
+                
+                // Clear current options
+                sectionSelect.innerHTML = '<option value="">All Sections</option>';
+                
+                // Add options based on selected grade
+                if (gradeSections[gradeLevel]) {
+                    gradeSections[gradeLevel].forEach(section => {
+                        const option = document.createElement('option');
+                        option.value = section;
+                        option.textContent = section;
+                        sectionSelect.appendChild(option);
+                    });
+                }
+            } else {
+                filterSectionContainer.style.display = 'none';
+                sectionSelect.innerHTML = '<option value="">All Sections</option>';
+            }
+        }
+
+        // Modal functions
+        function openAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'flex';
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'none';
+            document.getElementById('createUserForm').reset();
+            document.getElementById('modalStudentFields').style.display = 'none';
+        }
+
+        function openSearchModal() {
+            document.getElementById('searchUserModal').style.display = 'flex';
+            loadAllUsersForSearch();
+        }
+
+        function closeSearchModal() {
+            document.getElementById('searchUserModal').style.display = 'none';
+            // Reset filters
+            document.getElementById('searchInput').value = '';
+            document.querySelectorAll('.sort-option').forEach(opt => opt.classList.remove('active'));
+            document.getElementById('sort-name').classList.add('active');
+            document.getElementById('filterStudent').checked = false;
+            document.getElementById('filterTeacher').checked = false;
+            document.getElementById('filterAdmin').checked = false;
+            <?php if ($userRole == 'super_admin'): ?>
+            document.getElementById('filterSuperAdmin').checked = false;
+            <?php endif; ?>
+            document.getElementById('filterGradeLevel').value = '';
+            document.getElementById('filterSectionContainer').style.display = 'none';
+        }
+
+        function openDeleteUserModal() {
+            document.getElementById('deleteUserModal').style.display = 'flex';
+            loadDeleteUserList();
+        }
+
+        function closeDeleteUserModal() {
+            document.getElementById('deleteUserModal').style.display = 'none';
+            document.getElementById('deleteSearchInput').value = '';
+        }
+
+        // Submit add user form
+        function submitAddUser() {
+            const form = document.getElementById('createUserForm');
+            const formData = new FormData(form);
+            
+            // If role is not student, remove student-specific fields
+            const role = document.getElementById('modalRoleSelect').value;
+            if (role !== 'student') {
+                formData.delete('gradeLevel');
+                formData.delete('section');
+                formData.delete('lrn');
+            }
+            
+            fetch('php/handle_user.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('User created successfully!');
+                    closeAddUserModal();
+                    loadUsers(); // Refresh user list
+                } else {
+                    alert('Error creating user: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error creating user:', error);
+                alert('Error creating user');
+            });
+        }
+
+        // Load all users for search
+        let allUsers = [];
+        
+        function loadAllUsersForSearch() {
+            fetch('php/get_users.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.users) {
+                        allUsers = data.users;
+                        performSearch();
+                    }
+                })
+                .catch(error => console.error('Error loading users for search:', error));
+        }
+
+        // Perform search with filters
+        let currentSort = 'name';
+        
+        function setSort(sortBy) {
+            currentSort = sortBy;
+            document.querySelectorAll('.sort-option').forEach(opt => opt.classList.remove('active'));
+            document.getElementById(`sort-${sortBy}`).classList.add('active');
+            performSearch();
+        }
+
+        function applyFilters() {
+            performSearch();
+        }
+
+        function performSearch() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            // Get role filters
+            const filterStudent = document.getElementById('filterStudent')?.checked || false;
+            const filterTeacher = document.getElementById('filterTeacher')?.checked || false;
+            const filterAdmin = document.getElementById('filterAdmin')?.checked || false;
+            <?php if ($userRole == 'super_admin'): ?>
+            const filterSuperAdmin = document.getElementById('filterSuperAdmin')?.checked || false;
+            <?php endif; ?>
+            
+            // Get grade and section filters
+            const filterGrade = document.getElementById('filterGradeLevel').value;
+            const filterSection = document.getElementById('filterSection').value;
+            
+            // Filter users
+            let filteredUsers = allUsers.filter(user => {
+                // Search term filter
+                const matchesSearch = searchTerm === '' || 
+                    user.full_name?.toLowerCase().includes(searchTerm) ||
+                    user.username?.toLowerCase().includes(searchTerm) ||
+                    user.email?.toLowerCase().includes(searchTerm);
+                
+                if (!matchesSearch) return false;
+                
+                // Role filter
+                const roleFilters = [];
+                if (filterStudent) roleFilters.push('student');
+                if (filterTeacher) roleFilters.push('teacher');
+                if (filterAdmin) roleFilters.push('admin');
+                <?php if ($userRole == 'super_admin'): ?>
+                if (filterSuperAdmin) roleFilters.push('super_admin');
+                <?php endif; ?>
+                
+                if (roleFilters.length > 0 && !roleFilters.includes(user.role)) return false;
+                
+                // Grade filter
+                if (filterGrade && user.grade_level !== filterGrade) return false;
+                
+                // Section filter
+                if (filterSection && user.section !== filterSection) return false;
+                
+                return true;
+            });
+            
+            // Sort users
+            filteredUsers.sort((a, b) => {
+                switch(currentSort) {
+                    case 'name':
+                        return (a.full_name || '').localeCompare(b.full_name || '');
+                    case 'role':
+                        return (a.role || '').localeCompare(b.role || '');
+                    case 'grade':
+                        return (a.grade_level || '').localeCompare(b.grade_level || '');
+                    case 'date':
+                        return new Date(b.created_at) - new Date(a.created_at);
+                    default:
+                        return 0;
+                }
+            });
+            
+            // Display results
+            displaySearchResults(filteredUsers);
+        }
+
+        function displaySearchResults(users) {
+            const resultsDiv = document.getElementById('searchResults');
+            
+            if (users.length === 0) {
+                resultsDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No users found matching your criteria.</div>';
+                return;
+            }
+            
+            let html = '';
+            users.forEach(user => {
+                const roleClass = `role-badge-${user.role}`;
+                const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
+                
+                html += `
+                    <div class="search-result-item">
+                        <div class="user-name">${user.full_name || 'N/A'}</div>
+                        <div class="user-details">
+                            <span>${user.username || 'N/A'}</span>
+                            <span>•</span>
+                            <span>${user.email || 'N/A'}</span>
+                            <span>•</span>
+                            <span class="user-role ${roleClass}">${roleDisplay}</span>
+                            ${user.grade_level ? `<span>•</span><span>${user.grade_level} - ${user.section || ''}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Load users for deletion
+        function loadDeleteUserList() {
+            const deleteList = document.getElementById('deleteUserList');
+            const searchTerm = document.getElementById('deleteSearchInput')?.value.toLowerCase() || '';
+            
+            deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Loading users...</div>';
+            
+            fetch('php/get_users.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.users) {
+                        // Filter out current user and apply search
+                        const currentUserId = <?php echo $userId; ?>;
+                        let filteredUsers = data.users.filter(user => user.id != currentUserId);
+                        
+                        // Apply search filter
+                        if (searchTerm) {
+                            filteredUsers = filteredUsers.filter(user => 
+                                user.full_name?.toLowerCase().includes(searchTerm) ||
+                                user.username?.toLowerCase().includes(searchTerm) ||
+                                user.email?.toLowerCase().includes(searchTerm)
+                            );
+                        }
+                        
+                        displayDeleteUserList(filteredUsers);
+                    } else {
+                        deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Error loading users</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading users for deletion:', error);
+                    deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;">Error loading users</div>';
+                });
+        }
+
+        function displayDeleteUserList(users) {
+            const deleteList = document.getElementById('deleteUserList');
+            
+            if (users.length === 0) {
+                deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No users found.</div>';
+                document.getElementById('selectedCount').textContent = '0';
+                return;
+            }
+            
+            let html = '';
+            users.forEach(user => {
+                const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
+                html += `
+                    <div class="user-delete-item">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #0a2d63;">${user.full_name || 'N/A'}</div>
+                            <div style="font-size: 12px; color: #666;">${user.username || 'N/A'} • ${user.email || 'N/A'} • ${roleDisplay}</div>
+                        </div>
+                        <input type="checkbox" class="delete-checkbox" value="${user.id}" onchange="updateSelectedCount()">
+                    </div>
+                `;
+            });
+            
+            deleteList.innerHTML = html;
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('#deleteUserList .delete-checkbox:checked');
+            document.getElementById('selectedCount').textContent = checkboxes.length;
+        }
+
+        function confirmDeleteUsers() {
+        const checkboxes = document.querySelectorAll('#deleteUserList .delete-checkbox:checked');
+        const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+    
+        if (selectedIds.length === 0) {
+            alert('Please select at least one user to delete.');
+            return;
+        }
+    
+        if (!confirm(`Are you sure you want to delete ${selectedIds.length} user(s)? This action cannot be undone.`)) {
+            return;
+        }
+    
+        // Show loading state
+        const deleteBtn = document.querySelector('#deleteUserModal .btn-delete');
+        const originalText = deleteBtn.textContent;
+            deleteBtn.textContent = 'Deleting...';
+            deleteBtn.disabled = true;
+    
+        // Delete users one by one
+        let deletedCount = 0;
+        let failedCount = 0;
+    
+        function deleteNextUser(index) {
+            if (index >= selectedIds.length) {
+            // All done
+            deleteBtn.textContent = originalText;
+            deleteBtn.disabled = false;
+            
+            if (deletedCount > 0) {
+                alert(`Successfully deleted ${deletedCount} user(s). ${failedCount > 0 ? failedCount + ' failed.' : ''}`);
+                closeDeleteUserModal();
+                loadUsers(); // Refresh user list
+                if (typeof loadDeleteUserList === 'function') {
+                    loadDeleteUserList(); // Refresh delete modal list
+                }
+            } else {
+                alert('No users were deleted.');
+            }
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('user_id', selectedIds[index]);
+        
+        fetch('php/delete_users.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.text(); // Get as text first to debug
+        })
+        .then(text => {
+            try {
+                const data = JSON.parse(text);
+                if (data.success) {
+                    deletedCount++;
+                } else {
+                    console.error('Delete failed:', data.message);
+                    failedCount++;
+                }
+            } catch (e) {
+                console.error('Invalid JSON response:', text);
+                failedCount++;
+            }
+            // Delete next user
+            deleteNextUser(index + 1);
+        })
+        .catch(error => {
+            console.error('Error deleting user:', error);
+            failedCount++;
+            deleteNextUser(index + 1);
+        });
+    }
+    
+    // Start deleting from first user
+    deleteNextUser(0);
+}
 
         // Other admin helper functions
         function updateStatus(enrollmentId, status) {
@@ -2450,64 +3936,41 @@ try {
             }
         }
 
-
         // Update clock immediately and every second
         updateLiveClock();
         setInterval(updateLiveClock, 1000);
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Add event listener for Show Users button
-            const showUsersBtn = document.getElementById('showUsersBtn');
-            if (showUsersBtn) {
-                showUsersBtn.addEventListener('click', loadUsers);
-            }
-            
-            // Add event listener for Create User form
-            const createUserForm = document.getElementById('createUserForm');
-            if (createUserForm) {
-                createUserForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    const formData = new FormData(this);
-                    
-                    // If role is not student, remove student-specific fields
-                    const role = document.getElementById('roleSelect').value;
-                    if (role !== 'student') {
-                        formData.delete('gradeLevel');
-                        formData.delete('section');
-                        formData.delete('lrn');
-                    }
-                    
-                    fetch('php/handle_user.php', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('User created successfully!');
-                            this.reset();
-                            // Reset student fields visibility
-                            document.getElementById('studentFields').style.display = 'none';
-                            document.getElementById('gradeLevel').required = false;
-                            document.getElementById('sectionSelect').required = false;
-                            document.getElementById('lrnField').required = false;
-                            document.getElementById('sectionSelect').innerHTML = '<option value="">Select Section</option>';
-                        } else {
-                            alert('Error creating user: ' + data.message);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error creating user:', error);
-                        alert('Error creating user');
-                    });
-                });
-            }
-            
             <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
             loadEnrollments();
             setInterval(loadEnrollments, 30000);
             <?php endif; ?>
+            
+            // Close modals when clicking outside
+            window.onclick = function(event) {
+                const addModal = document.getElementById('addUserModal');
+                const searchModal = document.getElementById('searchUserModal');
+                const deleteModal = document.getElementById('deleteUserModal');
+                const documentModal = document.getElementById('documentModal');
+                const enrollmentSearchModal = document.getElementById('enrollmentSearchModal');
+                
+                if (event.target === addModal) {
+                    closeAddUserModal();
+                }
+                if (event.target === searchModal) {
+                    closeSearchModal();
+                }
+                if (event.target === deleteModal) {
+                    closeDeleteUserModal();
+                }
+                if (event.target === documentModal) {
+                    closeDocumentModal();
+                }
+                if (event.target === enrollmentSearchModal) {
+                    closeEnrollmentSearchModal();
+                }
+            }
         });
 
         // Sidebar toggle
@@ -2516,6 +3979,11 @@ try {
             const overlay = document.getElementById('sidebarOverlay');
             sidebar.classList.toggle('open');
             overlay.classList.toggle('active');
+        }
+
+        // Generate PDF function
+        function generatePDF(enrollmentId) {
+            alert('PDF generation feature coming soon!');
         }
     </script>
 </body>
