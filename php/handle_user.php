@@ -39,6 +39,13 @@ $gradeLevel = trim($_POST['gradeLevel'] ?? '');
 $section = trim($_POST['section'] ?? '');
 $lrn = trim($_POST['lrn'] ?? '');
 
+// Enrollment fields
+$age = trim($_POST['age'] ?? '');
+$gender = trim($_POST['gender'] ?? '');
+$birthdate = trim($_POST['birthdate'] ?? '');
+$strand = trim($_POST['strand'] ?? '');
+$phone = trim($_POST['phone'] ?? '');
+
 // Validation
 $errors = [];
 
@@ -96,11 +103,47 @@ if ($role == 'student') {
     if (empty($lrn)) {
         $errors[] = 'LRN is required for students';
     }
+
+    // Enrollment field validations
+    if (empty($age) || !is_numeric($age) || $age < 1 || $age > 120) {
+        $errors[] = 'Valid age is required';
+    }
+
+    if (empty($gender) || !in_array($gender, ['Male', 'Female'])) {
+        $errors[] = 'Gender is required';
+    }
+
+    if (empty($birthdate)) {
+        $errors[] = 'Birthdate is required';
+    } else {
+        $date = DateTime::createFromFormat('Y-m-d', $birthdate);
+        if (!$date || $date->format('Y-m-d') !== $birthdate) {
+            $errors[] = 'Invalid birthdate format';
+        }
+    }
+
+    // Phone: must be exactly 10 digits
+    if (empty($phone) || !preg_match('/^[0-9]{10}$/', $phone)) {
+        $errors[] = 'Valid phone number (10 digits) is required';
+    }
+
+    // Strand validation for Grade 11 & 12
+    if (in_array($gradeLevel, ['Grade 11', 'Grade 12'])) {
+        if (empty($strand) || !in_array($strand, ['STEM', 'ABM', 'HUMSS'])) {
+            $errors[] = 'Strand is required for Senior High School';
+        }
+    } else {
+        $strand = null;
+    }
 } else {
-    // For non-student roles, set these to null
     $gradeLevel = null;
     $section = null;
     $lrn = null;
+    $age = null;
+    $gender = null;
+    $birthdate = null;
+    $strand = null;
+    $phone = null;
 }
 
 if (!empty($errors)) {
@@ -139,11 +182,39 @@ try {
         $lrn
     ]);
 
+    $userId = $pdo->lastInsertId();
+
+    // If role is student, also create an enrollment record
+    if ($role == 'student') {
+        // Format phone with +63 prefix
+        $fullPhone = '+63' . $phone;
+
+        // Insert into enrollments table
+        $enrollStmt = $pdo->prepare("
+            INSERT INTO enrollments 
+            (student_id, full_name, email, phone, age, gender, birthdate, grade_level, strand, section, lrn, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', NOW())
+        ");
+        $enrollStmt->execute([
+            $userId,
+            $fullName,
+            $email,
+            $fullPhone,
+            $age,
+            $gender,
+            $birthdate,
+            $gradeLevel,
+            $strand,
+            $section,
+            $lrn
+        ]);
+    }
+
     ob_end_clean();
     echo json_encode([
         'success' => true,
         'message' => 'User created successfully',
-        'user_id' => $pdo->lastInsertId()
+        'user_id' => $userId
     ]);
 
 } catch(PDOException $e) {

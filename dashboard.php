@@ -164,701 +164,21 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Baesa Adventist Academy - Dashboard</title>
-    <link rel="stylesheet" href="css/style.css">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-
-        .dashboard-main {
-            width: 100%;
-            max-width: 100%;
-            margin: 0;
-            padding: 0;
+        /* Custom animations and overrides */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-
-        .dashboard-content {
-            display: flex !important;
-            justify-content: center !important;
-            align-items: flex-start !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 20px !important;
-            min-height: calc(100vh - 120px);
-        }
-
-        /* Center container for all cards */
-        .centered-container {
-            width: 100%;
-            max-width: 1000px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: center;
-        }
-
-        /* All cards - hidden by default, centered when shown */
-        .dashboard-card {
-            display: none !important;
-            max-width: 900px !important;
-            width: 100% !important;
-            margin: 0 auto !important;
-            min-height: 600px !important;
-        }
-
-        /* Show only active cards */
-        .dashboard-card.active {
-            display: flex !important;
-        }
-
-        /* Ensure proper spacing */
-        .card-content {
-            width: 100%;
-            padding: 30px;
-        }
-
-        /* COMMON STYLES */
-        .profile-card .profile-info {
-            background: #f8f9fa;
-            padding: 30px;
-            border-radius: 0;
-            flex: 1;
-        }
-
-        .profile-card .info-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 0;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .profile-card .info-item:last-child {
-            border-bottom: none;
-        }
-
-        .profile-card .info-item .label {
-            font-weight: 600;
-            color: #333;
-            font-size: 16px;
-        }
-
-        .profile-card .info-item .value {
-            color: #666;
-            font-size: 16px;
-            text-align: right;
-        }
-
-        .announcements-card .announcement-list,
-        .payables-card .payable-list,
-        .payables-management-card .payable-list {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .announcements-card .announcement-item,
-        .payables-card .payable-item,
-        .payables-management-card .payable-item {
-            background: #f8f9fa;
-            padding: 25px;
-            transition: background 0.3s;
-            border-radius: 0;
-        }
-
-        .announcements-card .announcement-item:hover,
-        .payables-card .payable-item:hover,
-        .payables-management-card .payable-item:hover {
-            background: #f0f2f5;
-        }
-
-        .announcements-card .announcement-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .announcements-card .announcement-header h4 {
-            margin: 0;
-            color: #0a2d63;
-            font-size: 18px;
-            font-weight: 600;
-            flex: 1;
-        }
-
-        .announcements-card .announcement-date {
-            font-size: 14px;
-            color: #666;
-            background: #e9ecef;
-            padding: 5px 10px;
-            border-radius: 4px;
-            white-space: nowrap;
-        }
-
-        .announcements-card .announcement-item p {
-            margin: 0;
-            color: #333;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-
-        .payables-card .payable-item,
-        .payables-management-card .payable-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .payables-card .payable-details,
-        .payables-management-card .payable-details {
-            flex: 1;
-        }
-
-        .payables-card .payable-details h4,
-        .payables-management-card .payable-details h4 {
-            margin: 0 0 10px 0;
-            color: #333;
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .payables-card .payable-date,
-        .payables-management-card .payable-date {
-            font-size: 14px;
-            color: #666;
-            background: #e9ecef;
-            padding: 5px 10px;
-            border-radius: 4px;
-            display: inline-block;
-        }
-
-        .payables-card .payable-amount,
-        .payables-management-card .payable-amount {
-            text-align: right;
-            min-width: 150px;
-        }
-
-        .payables-card .payable-total,
-        .payables-management-card .payable-total {
-            font-weight: 700;
-            font-size: 20px;
-            color: #0a2d63;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        .payables-card .payable-status,
-        .payables-management-card .payable-status {
-            font-size: 14px;
-            color: #666;
-            background: #e9ecef;
-            padding: 5px 10px;
-            border-radius: 4px;
-            display: inline-block;
-        }
-
-        .status-btn {
-            transition: all 0.3s ease;
-        }
-
-        .status-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .status-btn:active {
-            transform: translateY(0);
-        }
-
-        .event-item {
+        .animate-slideIn {
             animation: slideIn 0.3s ease;
         }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
-        
-        /* Subject item styling */
-        .subject-item {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            transition: transform 0.2s;
-        }
-        
-        .subject-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        
-        .subject-item h4 {
-            margin: 0 0 10px 0;
-            color: #0a2d63;
-            font-size: 18px;
-        }
-        
-        .subject-item p {
-            margin: 5px 0;
-            color: #555;
-            font-size: 14px;
-        }
-        
-        .subject-item .description {
-            color: #666;
-            font-style: italic;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #e0e0e0;
-        }
-        
-        .subject-item .schedule-list {
-            margin-top: 10px;
-            padding-left: 15px;
-        }
-        
-        .subject-item .schedule-item {
-            margin: 3px 0;
-            color: #555;
-            font-size: 13px;
-        }
-        
-        .subject-item .schedule-item .day {
-            font-weight: 600;
-            color: #0a2d63;
-        }
-        
-        .subject-item .schedule-item .time {
-            color: #666;
-        }
-
-        /* Live clock styling */
-        .live-clock {
-            background: #0a2d63;
-            color: white;
-            padding: 8px 15px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 16px;
-            font-weight: 600;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            min-width: 180px;
-        }
-
-        .live-clock .time {
-            font-size: 18px;
-            letter-spacing: 1px;
-        }
-
-        .live-clock .date {
-            font-size: 12px;
-            opacity: 0.9;
-            margin-top: 2px;
-            display: block !important;
-        }
-
-        /* No events message styling */
-        .no-events-message h4 {
-            color: #0a2d63 !important;
-        }
-
-        .no-events-message p {
-            color: #666 !important;
-        }
-
-        /* Subjects header styling */
-        .subjects-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .subjects-header h3 {
-            margin: 0;
-            color: #0a2d63;
-        }
-
-        .view-all-btn {
-            background: #0a2d63;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background 0.3s;
-        }
-
-        .view-all-btn:hover {
-            background: #08306b;
-        }
-
-        .view-all-btn:active {
-            transform: translateY(1px);
-        }
-
-        .today-badge {
-            background: #10b981;
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 10px;
-            vertical-align: middle;
-        }
-
-        .no-subjects-today {
-            text-align: center;
-            padding: 30px 20px;
-            color: #666;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-
-        .no-subjects-today h4 {
-            color: #0a2d63;
-            margin-bottom: 10px;
-        }
-
-        /* Event item styling */
-        .event-item {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            transition: transform 0.2s;
-        }
-
-        .event-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .event-item .event-date {
-            background: #0a2d63;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 4px;
-            font-weight: 600;
-            font-size: 14px;
-            display: inline-block;
-            margin-bottom: 10px;
-            min-width: 200px;
-            text-align: center;
-        }
-
-        .event-item .event-details h4 {
-            margin: 0 0 8px 0;
-            color: #0a2d63;
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .event-item .event-details p {
-            margin: 5px 0;
-            color: #555;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        /* Event list container */
-        .event-list {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-top: 20px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-
-        /* Scrollbar styling */
-        .event-list::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .event-list::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 3px;
-        }
-
-        .event-list::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 3px;
-        }
-
-        .event-list::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
-
-        /* Grades table styling */
-        .grades-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            background: white;
-        }
-
-        .grades-table th {
-            background: #0a2d63;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-        }
-
-        .grades-table td {
-            padding: 12px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .grades-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .grade-score {
-            font-weight: 600;
-            color: #0a2d63;
-            font-size: 16px;
-        }
-
-        /* Payment Processing Styling */
-        .payments-card .payment-form-container {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 8px;
-            margin-bottom: 25px;
-        }
-
-        .payments-card .payment-form-container h4 {
-            margin: 0 0 20px 0;
-            color: #0a2d63;
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .payments-card .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .payments-card .form-group {
-            margin-bottom: 15px;
-        }
-
-        .payments-card .form-group.full-width {
-            grid-column: span 2;
-        }
-
-        .payments-card label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .payments-card input,
-        .payments-card select {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            color: #333;
-            background: white;
-            transition: border 0.3s;
-        }
-
-        .payments-card input:focus,
-        .payments-card select:focus {
-            outline: none;
-            border-color: #0a2d63;
-            box-shadow: 0 0 0 2px rgba(10, 45, 99, 0.1);
-        }
-
-        .payments-card .form-actions {
-            grid-column: span 2;
-            text-align: center;
-            margin-top: 10px;
-        }
-
-        .payments-card .btn {
-            padding: 10px 24px;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .payments-card .btn-primary {
-            background: #0a2d63;
-            color: white;
-        }
-
-        .payments-card .btn-primary:hover {
-            background: #08306b;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(10, 45, 99, 0.2);
-        }
-
-        .payments-card .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .payments-card .btn-success:hover {
-            background: #218838;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
-        }
-
-        .payments-card .btn-load {
-            background: #6c757d;
-            color: white;
-        }
-
-        .payments-card .btn-load:hover {
-            background: #5a6268;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.2);
-        }
-
-        .payments-card .btn + .btn {
-            margin-left: 10px;
-        }
-
-        /* Payables List Styling */
-        .payables-list-container {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 8px;
-            margin-bottom: 25px;
-            border: 1px solid #e0e0e0;
-        }
-
-        .payables-list-container h4 {
-            margin: 0 0 20px 0;
-            color: #0a2d63;
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .payables-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr auto;
-            gap: 15px;
-            font-size: 14px;
-        }
-
-        .payables-header {
-            font-weight: 600;
-            color: #333;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #ddd;
-            margin-bottom: 10px;
-        }
-
-        .payables-row {
-            display: contents;
-        }
-
-        .payables-row > div {
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            align-items: center;
-        }
-
-        .payables-row:last-child > div {
-            border-bottom: none;
-        }
-
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .status-paid {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .status-overdue {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        /* Payment Result Styling */
-        .payment-result-container {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 20px;
-        }
-
-        .payment-result-container h4 {
-            margin: 0 0 15px 0;
-            color: #155724;
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .payment-result-container p {
-            margin: 8px 0;
-            color: #155724;
-            font-size: 14px;
-        }
-
-        .payment-result-container ul {
-            margin: 10px 0 0 0;
-            padding-left: 20px;
-        }
-
-        .payment-result-container li {
-            margin: 5px 0;
-            color: #155724;
-            font-size: 14px;
-        }
-
-        /* Loading State */
-        .loading {
-            text-align: center;
-            padding: 40px 20px;
-            color: #666;
-        }
-
         .loading::after {
             content: "";
             display: inline-block;
@@ -871,625 +191,112 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             margin-left: 10px;
             vertical-align: middle;
         }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Teacher-specific styling */
-        .teacher-actions {
-            display: flex;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .action-btn {
-            background: #0a2d63;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s;
-            display: inline-block;
-        }
-
-        .action-btn:hover {
-            background: #08306b;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        /* Modal Styles */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-container {
-            background: white;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-        }
-
-        .modal-header {
-            padding: 20px 25px;
-            border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #f8f9fa;
-            border-radius: 8px 8px 0 0;
-        }
-
-        .modal-header h3 {
-            margin: 0;
-            color: #0a2d63;
-            font-size: 20px;
-            font-weight: 600;
-        }
-
-        .modal-close {
-            background: transparent;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: #666;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-        }
-
-        .modal-close:hover {
-            background: #e0e0e0;
-            color: #333;
-        }
-
-        .modal-body {
-            padding: 25px;
-        }
-
-        .modal-footer {
-            padding: 20px 25px;
-            border-top: 1px solid #e0e0e0;
-            text-align: right;
-            background: #f8f9fa;
-            border-radius: 0 0 8px 8px;
-        }
-
-        .modal-footer button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-
-        .modal-footer .btn-cancel {
-            background: #6c757d;
-            color: white;
-        }
-
-        .modal-footer .btn-cancel:hover {
-            background: #5a6268;
-        }
-
-        .modal-footer .btn-confirm {
-            background: #0a2d63;
-            color: white;
-        }
-
-        .modal-footer .btn-confirm:hover {
-            background: #08306b;
-        }
-
-        .modal-footer .btn-delete {
-            background: #dc2626;
-            color: white;
-        }
-
-        .modal-footer .btn-delete:hover {
-            background: #b91c1c;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            color: #333;
-            background: white;
-            transition: border 0.3s;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #0a2d63;
-            box-shadow: 0 0 0 2px rgba(10, 45, 99, 0.1);
-        }
-
-        .student-fields {
-            display: none;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-
-        .checkbox-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .checkbox-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .checkbox-item input[type="checkbox"] {
-            width: auto;
-            margin-right: 5px;
-        }
-
-        .search-results {
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            margin-top: 15px;
-        }
-
-        .search-result-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e0e0e0;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .search-result-item:hover {
-            background: #f0f2f5;
-        }
-
-        .search-result-item:last-child {
-            border-bottom: none;
-        }
-
-        .search-result-item .user-name {
-            font-weight: 600;
-            color: #0a2d63;
-            margin-bottom: 3px;
-        }
-
-        .search-result-item .user-details {
-            font-size: 12px;
-            color: #666;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .search-result-item .user-role {
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .role-badge-student { background: #6c757d; color: white; }
-        .role-badge-teacher { background: #10b981; color: white; }
-        .role-badge-admin { background: #0a2d63; color: white; }
-        .role-badge-super_admin { background: #7c3aed; color: white; }
-
-        .user-delete-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 15px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .user-delete-item:last-child {
-            border-bottom: none;
-        }
-
-        .delete-checkbox {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-
-        .filter-section {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-
-        .filter-section h4 {
-            margin: 0 0 10px 0;
-            color: #0a2d63;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .sort-options {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        .sort-option {
-            padding: 6px 12px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-        }
-
-        .sort-option:hover {
-            background: #e0e0e0;
-        }
-
-        .sort-option.active {
-            background: #0a2d63;
-            color: white;
-            border-color: #0a2d63;
-        }
-
-        /* Document Modal Styling */
-        .document-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }
-
-        .document-item {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px 15px;
-            text-align: center;
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .document-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .document-icon {
-            font-size: 14px !important;
-            font-weight: bold;
-            color: #0a2d63;
-            background: #e9ecef;
-            padding: 8px 12px;
-            border-radius: 4px;
-            display: inline-block;
-            margin: 0 auto 15px auto;
-            width: fit-content;
-            font-family: monospace;
-            letter-spacing: 0.5px;
-        }
-
-        .document-name {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
-            word-break: break-word;
-            font-size: 16px;
-        }
-
-        .document-type {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 10px;
-            word-break: break-word;
-            background: #f1f3f5;
-            padding: 4px 8px;
-            border-radius: 4px;
-            display: inline-block;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .document-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 10px;
-        }
-
-        .document-btn {
-            padding: 6px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            text-decoration: none;
-            display: inline-block;
-            transition: background 0.2s;
-        }
-
-        .btn-view {
-            background: #0a2d63;
-            color: white;
-        }
-
-        .btn-view:hover {
-            background: #08306b;
-        }
-
-        .btn-download {
-            background: #28a745;
-            color: white;
-        }
-
-        .btn-download:hover {
-            background: #218838;
-        }
-
-        /* Enrollment Controls */
-        .enrollment-controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .enrollment-stats {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .enrollment-count {
-            background: #0a2d63;
-            color: white;
-            padding: 8px 15px;
-            border-radius: 4px;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .search-enrollment-btn {
-            background: #0a2d63;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .search-enrollment-btn:hover {
-            background: #08306b;
-        }
-
-        /* Pagination Controls */
-        .pagination-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            flex-wrap: wrap;
-        }
-
-        .pagination-controls select {
-            padding: 6px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .pagination-buttons {
-            display: flex;
-            gap: 5px;
-            margin-left: auto;
-        }
-
-        .pagination-btn {
-            padding: 6px 12px;
-            border: 1px solid #ddd;
-            background: white;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .pagination-btn:hover {
-            background: #e9ecef;
-        }
-
-        .pagination-btn.active {
-            background: #0a2d63;
-            color: white;
-            border-color: #0a2d63;
-        }
-
-        .pagination-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .pagination-info {
-            color: #666;
-            font-size: 14px;
-            margin-left: 10px;
-        }
-
-        .custom-per-page {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .custom-per-page input {
-            width: 60px;
-            padding: 6px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .custom-per-page button {
-            padding: 6px 12px;
-            background: #0a2d63;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .custom-per-page button:hover {
-            background: #08306b;
+        /* Ensure active card is visible */
+        .dashboard-card.active {
+            display: flex !important;
+        }
+        /* Sidebar transitions */
+        .sidebar {
+            transition: left 0.3s ease;
+        }
+        .sidebar.open {
+            left: 0 !important;
+        }
+        .sidebar-overlay.active {
+            display: block !important;
         }
     </style>
 </head>
-<body class="<?php echo in_array($userRole, ['admin', 'super_admin']) ? 'admin-mode' : ''; ?>">
+<body class="bg-gray-100 font-sans <?php echo in_array($userRole, ['admin', 'super_admin']) ? 'admin-mode' : ''; ?>">
     <!-- Dashboard Page -->
-    <div class="dashboard-page" id="dashboardPage">
-        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <img src="images/logo.png" alt="BAA Logo" class="sidebar-logo">
-                <h3>Baesa Adventist Academy</h3>
+    <div class="dashboard-page relative min-h-screen" id="dashboardPage">
+        <!-- Sidebar Overlay -->
+        <div class="sidebar-overlay fixed inset-0 bg-black bg-opacity-50 hidden z-[999]" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+        
+        <!-- Sidebar -->
+        <div class="sidebar fixed left-[-300px] top-0 w-[300px] h-screen bg-[#0a2d63] text-white z-[1000] shadow-lg" id="sidebar">
+            <div class="sidebar-header p-8 text-center bg-white bg-opacity-10 border-b border-white border-opacity-10">
+                <img src="images/logo.png" alt="BAA Logo" class="sidebar-logo w-[110px] h-[110px] mx-auto mb-5 object-contain">
+                <h3 class="text-xl font-semibold text-white">Baesa Adventist Academy</h3>
             </div>
-            <ul>
+            <ul class="py-5">
                 <?php if ($userRole == 'admin' || $userRole == 'super_admin'): ?>
-                    <li><a href="#" onclick="navigateTo('home'); return false;" class="active" id="menu-home">Enrollment Requests</a></li>
-                    <li><a href="#" onclick="navigateTo('users'); return false;" id="menu-users">User Management</a></li>
-                    <li><a href="#" onclick="navigateTo('payables'); return false;" id="menu-payables">Payables Management</a></li>
-                    <li><a href="#" onclick="navigateTo('payments'); return false;" id="menu-payments">Payment Processing</a></li>
-                    <li><a href="#" onclick="navigateTo('profile'); return false;" id="menu-profile">Profile</a></li>
+                    <li><a href="#" onclick="navigateTo('home'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-home">Enrollment Requests</a></li>
+                    <li><a href="#" onclick="navigateTo('users'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-users">User Management</a></li>
+                    <li><a href="#" onclick="navigateTo('payables'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-payables">Payables Management</a></li>
+                    <li><a href="#" onclick="navigateTo('payments'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-payments">Payment Processing</a></li>
+                    <li><a href="#" onclick="navigateTo('profile'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-profile">Profile</a></li>
                 <?php else: ?>
-                    <li><a href="#" onclick="navigateTo('home'); return false;" class="active" id="menu-home">Home</a></li>
-                    <li><a href="#" onclick="navigateTo('grades'); return false;" id="menu-grades">Grades</a></li>
-                    <li><a href="#" onclick="navigateTo('subjects'); return false;" id="menu-subjects">Subjects</a></li>
-                    <li><a href="#" onclick="navigateTo('payables'); return false;" id="menu-payables">Payables</a></li>
-                    <li><a href="#" onclick="navigateTo('events'); return false;" id="menu-events">Events</a></li>
-                    <li><a href="#" onclick="navigateTo('profile'); return false;" id="menu-profile">Profile</a></li>
-                    <li><a href="#" onclick="navigateTo('announcements'); return false;" id="menu-announcements">Announcements</a></li>
+                    <li><a href="#" onclick="navigateTo('home'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-home">Home</a></li>
+                    <li><a href="#" onclick="navigateTo('grades'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-grades">Grades</a></li>
+                    <li><a href="#" onclick="navigateTo('subjects'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-subjects">Subjects</a></li>
+                    <li><a href="#" onclick="navigateTo('payables'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-payables">Payables</a></li>
+                    <li><a href="#" onclick="navigateTo('events'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-events">Events</a></li>
+                    <li><a href="#" onclick="navigateTo('profile'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-profile">Profile</a></li>
+                    <li><a href="#" onclick="navigateTo('announcements'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-announcements">Announcements</a></li>
                 <?php endif; ?>
                 <?php if ($userRole == 'teacher'): ?>
-                <li><a href="teacher_grades.php" id="menu-teacher">Grade Encoding</a></li>
+                <li><a href="teacher_grades.php" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-teacher">Grade Encoding</a></li>
                 <?php endif; ?>
             </ul>
         </div>
         
-        <div class="dashboard-main">
-            <!-- Dashboard Header -->
-            <div class="dashboard-header">
-                <div class="header-content">
-                    <div class="header-left">
-                        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
-                        <!-- Live Clock -->
-                        <div class="live-clock" id="liveClock">
-                            <div class="time"><?php echo $currentTime; ?></div>
-                            <div class="date"><?php echo $currentDate; ?></div>
-                        </div>
+        <!-- Main Content -->
+        <div class="dashboard-main flex flex-col min-h-screen">
+            <!-- Dashboard Header (fixed) -->
+            <div class="dashboard-header bg-[#0a2d63] text-white px-4 md:px-10 py-4 shadow-md w-full">
+                <div class="header-content flex items-center justify-between max-w-7xl mx-auto">
+                    <!-- Left section (menu button only) -->
+                    <div class="header-left flex items-center flex-1">
+                        <button class="menu-btn w-10 h-10 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-2xl rounded flex items-center justify-center transition" onclick="toggleSidebar()">☰</button>
                     </div>
-        
-                    <div class="header-center">
-                        <h2>Welcome to Your Dashboard</h2>
-                        <p>Stay updated with your academic progress and school activities</p>
+
+                    <!-- Center section (perfectly centered) -->
+                    <div class="header-center text-center flex-1">
+                        <h2 class="text-2xl md:text-3xl font-semibold mb-1">Welcome to Your Dashboard</h2>
+                        <p class="text-sm md:text-base opacity-90 whitespace-nowrap">Stay updated with your academic progress and school activities</p>
                     </div>
-        
-                    <div class="header-right">
-                        <!-- Search Icon Button -->
-                        <button onclick="openSearchModal()" style="background: transparent; border: none; cursor: pointer; margin-right: 15px; display: flex; align-items: center;">
-                            <img src="images/search_icon.png" alt="Search" style="width: 24px; height: 24px;">
+
+                    <!-- Right section (search + user) -->
+                    <div class="header-right flex items-center justify-end gap-4 flex-1">
+                        <button onclick="openSearchModal()" class="bg-transparent border-none cursor-pointer flex items-center">
+                            <img src="images/search_icon.png" alt="Search" class="w-6 h-6">
                         </button>
-                        <div class="user-info-container">
-                            <span class="user-name" id="userName"><?php echo htmlspecialchars($fullName); ?></span>
-                            <button class="logout-btn" onclick="window.location.href='php/logout.php'">Logout</button>
+                        <div class="user-info-container flex items-center gap-4">
+                            <span class="user-name font-bold text-xl md:text-2xl text-white"><?php echo htmlspecialchars($fullName); ?></span>
+                            <button class="logout-btn bg-white text-[#0a2d63] px-5 py-2 rounded-full font-semibold hover:bg-gray-100 hover:-translate-y-0.5 transition" onclick="window.location.href='php/logout.php'">Logout</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Dashboard Content - Centered Container -->
-            <div class="dashboard-content">
-                <div class="centered-container">
+            <div class="dashboard-content flex justify-center items-start w-full p-5 min-h-[calc(100vh-120px)]">
+                <div class="centered-container w-full max-w-[1000px] mx-auto">
                     <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
                         <!-- Admin Enrollments Dashboard -->
-                        <div class="dashboard-card grades-card active" id="adminEnrollmentCard">
-                            <div class="card-content">
-                                <div class="enrollment-controls">
-                                    <div class="enrollment-stats">
-                                        <h3>Student Access Requests</h3>
-                                        <span class="enrollment-count" id="enrollmentCount">Total Number of Enrolees: <?php echo $totalEnrollments; ?></span>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden <?php echo ($userRole == 'admin' || $userRole == 'super_admin') ? 'active' : ''; ?>" id="adminEnrollmentCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div class="enrollment-controls flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-gray-50 rounded">
+                                    <div class="enrollment-stats flex flex-col md:flex-row items-center gap-4">
+                                        <h3 class="text-2xl font-semibold text-[#0a2d63]">Student Access Requests</h3>
+                                        <span class="enrollment-count bg-[#0a2d63] text-white px-4 py-2 rounded font-semibold text-sm">Total Number of Enrolees: <?php echo $totalEnrollments; ?></span>
                                     </div>
-                                    <button class="search-enrollment-btn" onclick="openEnrollmentSearchModal()">
+                                    <button class="search-enrollment-btn bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition flex items-center gap-2" onclick="openEnrollmentSearchModal()">
                                         Search Enrollees
                                     </button>
                                 </div>
-                                <p>Review and manage pending student enrollments</p>
+                                <p class="text-gray-600">Review and manage pending student enrollments</p>
                                 
-                                <div id="enrollmentList">
-                                    <div style="text-align: center; color: #999; padding: 40px 20px;">
-                                        Loading enrollments...
-                                    </div>
+                                <div id="enrollmentList" class="space-y-4">
+                                    <div class="text-center text-gray-400 py-10">Loading enrollments...</div>
                                 </div>
 
                                 <!-- Pagination Controls -->
-                                <div id="enrollmentPagination" class="pagination-controls" style="display: none;">
-                                    <div class="custom-per-page">
-                                        <span>Show:</span>
-                                        <select id="perPageSelect" onchange="changePerPage()">
+                                <div id="enrollmentPagination" class="pagination-controls hidden mt-5 p-4 bg-gray-50 rounded flex flex-col md:flex-row items-center gap-4">
+                                    <div class="custom-per-page flex items-center gap-2">
+                                        <span class="text-sm text-gray-600">Show:</span>
+                                        <select id="perPageSelect" class="border border-gray-300 rounded px-2 py-1 text-sm" onchange="changePerPage()">
                                             <option value="10">10</option>
                                             <option value="25">25</option>
                                             <option value="50">50</option>
@@ -1497,29 +304,31 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                             <option value="100">100</option>
                                             <option value="custom">Custom</option>
                                         </select>
-                                        <div id="customPerPageInput" style="display: none;">
-                                            <input type="number" id="customPerPage" min="1" max="500" placeholder="Number">
-                                            <button onclick="applyCustomPerPage()">Apply</button>
+                                        <div id="customPerPageInput" class="hidden flex items-center gap-2">
+                                            <input type="number" id="customPerPage" min="1" max="500" placeholder="Number" class="border border-gray-300 rounded px-2 py-1 w-20 text-sm">
+                                            <button onclick="applyCustomPerPage()" class="bg-[#0a2d63] text-white px-3 py-1 rounded text-sm">Apply</button>
                                         </div>
                                     </div>
-                                    <div class="pagination-info" id="paginationInfo"></div>
-                                    <div class="pagination-buttons" id="paginationButtons"></div>
+                                    <div class="pagination-info text-sm text-gray-600" id="paginationInfo"></div>
+                                    <div class="pagination-buttons flex gap-1 ml-auto" id="paginationButtons"></div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- User Management Card -->
-                        <div class="dashboard-card users-card" id="usersCard">
-                            <div class="card-content">
-                                <h3>User Management</h3>
-                                <p>Manage user accounts - add and delete users</p>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="usersCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">User Management</h3>
+                                    <p class="text-gray-600">Manage user accounts - add and delete users</p>
+                                </div>
 
                                 <!-- User Management Actions -->
-                                <div style="display: flex; gap: 30px; margin-top: 50px; justify-content: center;">
-                                    <button onclick="openAddUserModal()" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                                <div class="flex gap-8 justify-center">
+                                    <button onclick="openAddUserModal()" class="bg-green-600 text-white px-6 py-3 rounded font-medium hover:bg-green-700 transition flex items-center gap-2">
                                         Add User
                                     </button>
-                                    <button onclick="openDeleteUserModal()" style="background: #dc2626; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                                    <button onclick="openDeleteUserModal()" class="bg-red-600 text-white px-6 py-3 rounded font-medium hover:bg-red-700 transition flex items-center gap-2">
                                         Delete User
                                     </button>
                                 </div>
@@ -1527,157 +336,163 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         </div>
 
                         <!-- Payables Management Card -->
-                        <div class="dashboard-card payables-management-card" id="payablesManagementCard">
-                            <div class="card-content">
-                                <h3>Payables Management</h3>
-                                <p>Calculate and manage student payables</p>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="payablesManagementCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Payables Management</h3>
+                                    <p class="text-gray-600">Calculate and manage student payables</p>
+                                </div>
 
                                 <!-- Payables Calculator Form -->
-                                <div style="margin-bottom: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-                                    <h4 style="margin-top: 0; color: #0a2d63;">Payables Calculator</h4>
-                                    <form id="payablesForm" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="p-5 bg-gray-50 rounded space-y-4">
+                                    <h4 class="text-lg font-semibold text-[#0a2d63]">Payables Calculator</h4>
+                                    <form id="payablesForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Select Student *</label>
-                                            <select id="studentSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
+                                            <label class="block mb-1 font-medium text-gray-700">Select Student *</label>
+                                            <select id="studentSelect" class="w-full p-2 border border-gray-300 rounded" required>
                                                 <option value="">Select Student</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Total Tuition Fee *</label>
-                                            <input type="number" id="tuitionFee" placeholder="0.00" step="0.01" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
+                                            <label class="block mb-1 font-medium text-gray-700">Total Tuition Fee *</label>
+                                            <input type="number" id="tuitionFee" placeholder="0.00" step="0.01" min="0" class="w-full p-2 border border-gray-300 rounded" required>
                                         </div>
                                         <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Down Payment *</label>
-                                            <input type="number" id="downPayment" placeholder="0.00" step="0.01" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
+                                            <label class="block mb-1 font-medium text-gray-700">Down Payment *</label>
+                                            <input type="number" id="downPayment" placeholder="0.00" step="0.01" min="0" class="w-full p-2 border border-gray-300 rounded" required>
                                         </div>
                                         <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Discounts/Grants</label>
-                                            <input type="number" id="discounts" placeholder="0.00" step="0.01" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                            <label class="block mb-1 font-medium text-gray-700">Discounts/Grants</label>
+                                            <input type="number" id="discounts" placeholder="0.00" step="0.01" min="0" class="w-full p-2 border border-gray-300 rounded">
                                         </div>
                                         <div>
-                                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Number of Monthly Payments</label>
-                                            <input type="number" id="monthlyPayments" placeholder="4" min="1" max="12" value="4" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                            <label class="block mb-1 font-medium text-gray-700">Number of Monthly Payments</label>
+                                            <input type="number" id="monthlyPayments" placeholder="4" min="1" max="12" value="4" class="w-full p-2 border border-gray-300 rounded">
                                         </div>
-                                        <div style="grid-column: span 2; text-align: center;">
-                                            <button type="button" onclick="calculatePayables()" style="background: #0a2d63; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">Calculate Remaining Balance</button>
+                                        <div class="md:col-span-2 text-center">
+                                            <button type="button" onclick="calculatePayables()" class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition">Calculate Remaining Balance</button>
                                         </div>
                                     </form>
                                 </div>
 
-                                <div id="calculationResult" style="margin-bottom: 20px; padding: 20px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; display: none;">
-                                    <h4 style="margin-top: 0; color: #0a2d63; margin-bottom: 15px;">Calculation Result</h4>
+                                <div id="calculationResult" class="hidden p-5 bg-gray-50 border border-gray-200 rounded space-y-4">
+                                    <h4 class="text-lg font-semibold text-[#0a2d63]">Calculation Result</h4>
                                     <div id="resultContent"></div>
                                 </div>
 
-                                <div style="text-align: center;">
-                                    <button onclick="addPayable()" id="addPayableBtn" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500; display: none;">Add to Student Payables</button>
+                                <div class="text-center">
+                                    <button onclick="addPayable()" id="addPayableBtn" class="hidden bg-green-600 text-white px-5 py-2 rounded font-medium hover:bg-green-700 transition">Add to Student Payables</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Payment Processing Card -->
-                        <div class="dashboard-card payments-card" id="paymentsCard">
-                            <div class="card-content">
-                                <h3>Payment Processing</h3>
-                                <p>Process student payments and update payable status</p>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="paymentsCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Payment Processing</h3>
+                                    <p class="text-gray-600">Process student payments and update payable status</p>
+                                </div>
 
                                 <!-- Payment Processing Form -->
-                                <div class="payment-form-container">
-                                    <h4>Process Payment</h4>
-                                    <form id="paymentForm" class="form-grid">
+                                <div class="p-6 bg-gray-50 rounded space-y-4">
+                                    <h4 class="text-lg font-semibold text-[#0a2d63]">Process Payment</h4>
+                                    <form id="paymentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div class="form-group">
-                                            <label for="paymentStudentSelect">Select Student *</label>
-                                            <select id="paymentStudentSelect" required>
+                                            <label for="paymentStudentSelect" class="block mb-2 font-medium text-gray-700">Select Student *</label>
+                                            <select id="paymentStudentSelect" class="w-full p-2 border border-gray-300 rounded" required>
                                                 <option value="">Select Student</option>
                                             </select>
                                         </div>
                                         
                                         <div class="form-group">
-                                            <label for="paymentAmount">Payment Amount *</label>
-                                            <input type="number" id="paymentAmount" placeholder="0.00" step="0.01" min="0" required>
+                                            <label for="paymentAmount" class="block mb-2 font-medium text-gray-700">Payment Amount *</label>
+                                            <input type="number" id="paymentAmount" placeholder="0.00" step="0.01" min="0" class="w-full p-2 border border-gray-300 rounded" required>
                                         </div>
                                         
-                                        <div class="form-group full-width">
-                                            <label for="paymentDate">Payment Date</label>
-                                            <input type="date" id="paymentDate" value="<?php echo date('Y-m-d'); ?>">
+                                        <div class="form-group md:col-span-2">
+                                            <label for="paymentDate" class="block mb-2 font-medium text-gray-700">Payment Date</label>
+                                            <input type="date" id="paymentDate" value="<?php echo date('Y-m-d'); ?>" class="w-full p-2 border border-gray-300 rounded">
                                         </div>
                                         
-                                        <div class="form-actions">
-                                            <button type="button" onclick="loadStudentPayables()" class="btn btn-load">
+                                        <div class="form-actions md:col-span-2 text-center">
+                                            <button type="button" onclick="loadStudentPayables()" class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition mr-2">
                                                 Load Student Payables
                                             </button>
-                                            <button type="button" onclick="processPayment()" class="btn btn-success">
+                                            <button type="button" onclick="processPayment()" class="bg-green-600 text-white px-5 py-2 rounded font-medium hover:bg-green-700 transition">
                                                 Process Payment
                                             </button>
                                         </div>
                                     </form>
                                 </div>
 
-                                <div id="studentPayables" class="payables-list-container" style="display: none;">
-                                    <h4>Student Payables</h4>
+                                <div id="studentPayables" class="hidden p-6 bg-gray-50 border border-gray-200 rounded space-y-4">
+                                    <h4 class="text-lg font-semibold text-[#0a2d63]">Student Payables</h4>
                                     <div id="payablesList" class="loading">Loading payables...</div>
                                 </div>
 
-                                <div id="paymentResult" class="payment-result-container" style="display: none;">
+                                <div id="paymentResult" class="hidden p-6 bg-green-100 border border-green-300 rounded text-green-700">
                                     <!-- Payment result will be inserted here -->
                                 </div>
                             </div>
                         </div>
 
                         <!-- Profile Card for Admin -->
-                        <div class="dashboard-card profile-card" id="adminProfileCard">
-                            <div class="card-content">
-                                <h3>Profile</h3>
-                                <p>View and update your personal information.</p>
-                                <div class="profile-info" id="adminProfileInfo">
-                                    <div class="info-item">
-                                        <span class="label">Full Name:</span>
-                                        <span class="value"><?php echo htmlspecialchars($fullName); ?></span>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="adminProfileCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Profile</h3>
+                                    <p class="text-gray-600">View and update your personal information.</p>
+                                </div>
+                                <div class="profile-info bg-gray-50 p-8 space-y-4" id="adminProfileInfo">
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">Full Name:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($fullName); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">Username:</span>
-                                        <span class="value"><?php echo htmlspecialchars($userName); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">Username:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($userName); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">User Role:</span>
-                                        <span class="value"><?php echo htmlspecialchars(ucfirst($userRole)); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">User Role:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars(ucfirst($userRole)); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">Email:</span>
-                                        <span class="value"><?php echo htmlspecialchars($user['email'] ?? 'N/A'); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">Email:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($user['email'] ?? 'N/A'); ?></span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Add User Modal -->
-                        <div id="addUserModal" class="modal-overlay">
-                            <div class="modal-container">
-                                <div class="modal-header">
-                                    <h3>Add New User</h3>
-                                    <button class="modal-close" onclick="closeAddUserModal()">×</button>
+                        <div id="addUserModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[1000]">
+                            <div class="modal-container bg-white rounded-lg w-[90%] max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
+                                <div class="modal-header p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center">
+                                    <h3 class="text-xl font-semibold text-[#0a2d63]">Add New User</h3>
+                                    <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeAddUserModal()">×</button>
                                 </div>
-                                <div class="modal-body">
+                                <div class="modal-body p-6">
                                     <form id="createUserForm">
-                                        <div class="form-group">
-                                            <label>Username *</label>
-                                            <input type="text" name="username" required>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Username *</label>
+                                            <input type="text" name="username" required class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#0a2d63] focus:ring-2 focus:ring-[#0a2d63] focus:ring-opacity-10">
                                         </div>
-                                        <div class="form-group">
-                                            <label>Email *</label>
-                                            <input type="email" name="email" required>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Email *</label>
+                                            <input type="email" name="email" required class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#0a2d63] focus:ring-2 focus:ring-[#0a2d63] focus:ring-opacity-10">
                                         </div>
-                                        <div class="form-group">
-                                            <label>Password *</label>
-                                            <input type="password" name="password" required>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Password *</label>
+                                            <input type="password" name="password" required class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#0a2d63] focus:ring-2 focus:ring-[#0a2d63] focus:ring-opacity-10">
                                         </div>
-                                        <div class="form-group">
-                                            <label>Full Name *</label>
-                                            <input type="text" name="fullName" required>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Full Name *</label>
+                                            <input type="text" name="fullName" required class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#0a2d63] focus:ring-2 focus:ring-[#0a2d63] focus:ring-opacity-10">
                                         </div>
-                                        <div class="form-group">
-                                            <label>Role *</label>
-                                            <select name="role" id="modalRoleSelect" onchange="toggleModalStudentFields()" required>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Role *</label>
+                                            <select name="role" id="modalRoleSelect" onchange="toggleModalStudentFields()" required class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#0a2d63] focus:ring-2 focus:ring-[#0a2d63] focus:ring-opacity-10">
                                                 <option value="">Select Role</option>
                                                 <option value="student">Student</option>
                                                 <option value="teacher">Teacher</option>
@@ -1688,10 +503,10 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                         </div>
                                         
                                         <!-- Student-specific fields -->
-                                        <div id="modalStudentFields" class="student-fields">
-                                            <div class="form-group">
-                                                <label>Grade Level *</label>
-                                                <select name="gradeLevel" id="modalGradeLevel" onchange="updateModalSections()">
+                                        <div id="modalStudentFields" class="student-fields hidden p-4 bg-gray-50 rounded mb-4">
+                                            <div class="form-group mb-4">
+                                                <label class="block mb-2 font-medium text-gray-700">Grade Level *</label>
+                                                <select name="gradeLevel" id="modalGradeLevel" onchange="updateModalSections()" class="w-full p-2 border border-gray-300 rounded">
                                                     <option value="">Select Grade Level</option>
                                                     <option value="Grade 7">Grade 7</option>
                                                     <option value="Grade 8">Grade 8</option>
@@ -1701,69 +516,107 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                                     <option value="Grade 12">Grade 12</option>
                                                 </select>
                                             </div>
-                                            <div class="form-group">
-                                                <label>Section *</label>
-                                                <select name="section" id="modalSectionSelect">
+                                            <div class="form-group mb-4">
+                                                <label class="block mb-2 font-medium text-gray-700">Section *</label>
+                                                <select name="section" id="modalSectionSelect" class="w-full p-2 border border-gray-300 rounded">
                                                     <option value="">Select Section</option>
                                                 </select>
                                             </div>
-                                            <div class="form-group">
-                                                <label>LRN *</label>
-                                                <input type="text" name="lrn" id="modalLrnField">
+                                            <div class="form-group mb-4">
+                                                <label class="block mb-2 font-medium text-gray-700">LRN *</label>
+                                                <input type="text" name="lrn" id="modalLrnField" class="w-full p-2 border border-gray-300 rounded">
                                             </div>
+
+                                            <!-- New enrollment fields -->
+                                            <div class="form-group mb-4">
+                                                <label class="block mb-2 font-medium text-gray-700">Age *</label>
+                                                <input type="number" name="age" id="modalAge" min="1" max="120" class="w-full p-2 border border-gray-300 rounded" required>
+                                            </div>
+                                            <div class="form-group mb-4">
+                                                <label class="block mb-2 font-medium text-gray-700">Gender *</label>
+                                                <select name="gender" id="modalGender" class="w-full p-2 border border-gray-300 rounded" required>
+                                                    <option value="">Select Gender</option>
+                                                    <option value="Male">Male</option>
+                                                    <option value="Female">Female</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group mb-4">
+                                                <label class="block mb-2 font-medium text-gray-700">Birthdate *</label>
+                                                <input type="date" name="birthdate" id="modalBirthdate" class="w-full p-2 border border-gray-300 rounded" required>
+                                            </div>
+                                            <div id="modalStrandContainer" class="form-group mb-4 hidden">
+                                                <label class="block mb-2 font-medium text-gray-700">Strand *</label>
+                                                <select name="strand" id="modalStrand" class="w-full p-2 border border-gray-300 rounded">
+                                                    <option value="">Select Strand</option>
+                                                    <option value="STEM">STEM (Science, Technology, Engineering, and Mathematics)</option>
+                                                    <option value="ABM">ABM (Accountancy, Business, and Management)</option>
+                                                    <option value="HUMSS">HUMSS (Humanities and Social Sciences)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group mb-4">
+                                                <label class="block mb-2 font-medium text-gray-700">Phone Number *</label>
+                                                <div class="phone-input-wrapper flex items-center border border-gray-300 rounded">
+                                                    <span class="phone-prefix bg-gray-100 px-3 py-2 rounded-l border-r border-gray-300">+63</span>
+                                                    <input type="text" name="phone" id="modalPhone" maxlength="10" placeholder="9XXXXXXXXX" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,10)" class="w-full p-2 border-0 rounded-r focus:ring-0" required>
+                                                </div>
+                                                <small class="text-gray-500">Enter 10 digits (without +63)</small>
+                                            </div>
+
+                                            <!-- Hidden field to store enrollment ID when accepting -->
+                                            <input type="hidden" id="modalEnrollmentId" value="">
                                         </div>
                                     </form>
                                 </div>
-                                <div class="modal-footer">
-                                    <button class="btn-cancel" onclick="closeAddUserModal()">Cancel</button>
-                                    <button class="btn-confirm" onclick="submitAddUser()">Add User</button>
+                                <div class="modal-footer p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right">
+                                    <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition mr-2" onclick="closeAddUserModal()">Cancel</button>
+                                    <button class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition" onclick="submitAddUser()">Add User</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Search Users Modal -->
-                        <div id="searchUserModal" class="modal-overlay">
-                            <div class="modal-container" style="max-width: 700px;">
-                                <div class="modal-header">
-                                    <h3>Search Users</h3>
-                                    <button class="modal-close" onclick="closeSearchModal()">×</button>
+                        <div id="searchUserModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[1000]">
+                            <div class="modal-container bg-white rounded-lg w-[90%] max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
+                                <div class="modal-header p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center">
+                                    <h3 class="text-xl font-semibold text-[#0a2d63]">Search Users</h3>
+                                    <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeSearchModal()">×</button>
                                 </div>
-                                <div class="modal-body">
+                                <div class="modal-body p-6">
                                     <!-- Search Input -->
-                                    <div class="form-group">
-                                        <label>Search by name, email, or username</label>
-                                        <input type="text" id="searchInput" placeholder="Type to search..." onkeyup="performSearch()">
+                                    <div class="form-group mb-4">
+                                        <label class="block mb-2 font-medium text-gray-700">Search by name, email, or username</label>
+                                        <input type="text" id="searchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded" onkeyup="performSearch()">
                                     </div>
 
                                     <!-- Filters Section -->
-                                    <div class="filter-section">
-                                        <h4>Filter by Role</h4>
-                                        <div class="checkbox-group">
-                                            <div class="checkbox-item">
+                                    <div class="filter-section bg-gray-50 p-4 rounded mb-4">
+                                        <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Filter by Role</h4>
+                                        <div class="checkbox-group flex flex-wrap gap-4">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterStudent" value="student" onchange="applyFilters()">
-                                                <label for="filterStudent">Student</label>
+                                                <label for="filterStudent" class="text-sm text-gray-700">Student</label>
                                             </div>
-                                            <div class="checkbox-item">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterTeacher" value="teacher" onchange="applyFilters()">
-                                                <label for="filterTeacher">Teacher</label>
+                                                <label for="filterTeacher" class="text-sm text-gray-700">Teacher</label>
                                             </div>
-                                            <div class="checkbox-item">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterAdmin" value="admin" onchange="applyFilters()">
-                                                <label for="filterAdmin">Admin</label>
+                                                <label for="filterAdmin" class="text-sm text-gray-700">Admin</label>
                                             </div>
                                             <?php if ($userRole == 'super_admin'): ?>
-                                            <div class="checkbox-item">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterSuperAdmin" value="super_admin" onchange="applyFilters()">
-                                                <label for="filterSuperAdmin">Super Admin</label>
+                                                <label for="filterSuperAdmin" class="text-sm text-gray-700">Super Admin</label>
                                             </div>
                                             <?php endif; ?>
                                         </div>
                                     </div>
 
-                                    <div class="filter-section">
-                                        <h4>Filter by Grade Level</h4>
-                                        <div class="form-group" style="margin-bottom: 10px;">
-                                            <select id="filterGradeLevel" onchange="updateFilterSections(); applyFilters();">
+                                    <div class="filter-section bg-gray-50 p-4 rounded mb-4">
+                                        <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Filter by Grade Level</h4>
+                                        <div class="form-group mb-3">
+                                            <select id="filterGradeLevel" class="w-full p-2 border border-gray-300 rounded" onchange="updateFilterSections(); applyFilters();">
                                                 <option value="">All Grade Levels</option>
                                                 <option value="Grade 7">Grade 7</option>
                                                 <option value="Grade 8">Grade 8</option>
@@ -1773,79 +626,77 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                                 <option value="Grade 12">Grade 12</option>
                                             </select>
                                         </div>
-                                        <div id="filterSectionContainer" style="display: none;">
-                                            <label>Section</label>
-                                            <select id="filterSection" onchange="applyFilters()">
+                                        <div id="filterSectionContainer" class="hidden">
+                                            <label class="block mb-2 font-medium text-gray-700">Section</label>
+                                            <select id="filterSection" class="w-full p-2 border border-gray-300 rounded" onchange="applyFilters()">
                                                 <option value="">All Sections</option>
                                             </select>
                                         </div>
                                     </div>
 
-                                    <div class="filter-section">
-                                        <h4>Sort By</h4>
-                                        <div class="sort-options">
-                                            <span class="sort-option active" onclick="setSort('name')" id="sort-name">Name</span>
-                                            <span class="sort-option" onclick="setSort('role')" id="sort-role">Role</span>
-                                            <span class="sort-option" onclick="setSort('grade')" id="sort-grade">Grade Level</span>
-                                            <span class="sort-option" onclick="setSort('date')" id="sort-date">Date Joined</span>
+                                    <div class="filter-section bg-gray-50 p-4 rounded mb-4">
+                                        <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Sort By</h4>
+                                        <div class="sort-options flex gap-2 flex-wrap">
+                                            <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition active:bg-[#0a2d63] active:text-white active:border-[#0a2d63]" onclick="setSort('name')" id="sort-name">Name</span>
+                                            <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setSort('role')" id="sort-role">Role</span>
+                                            <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setSort('grade')" id="sort-grade">Grade Level</span>
+                                            <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setSort('date')" id="sort-date">Date Joined</span>
                                         </div>
                                     </div>
 
                                     <!-- Search Results -->
-                                    <div id="searchResults" class="search-results">
-                                        <div style="text-align: center; padding: 40px; color: #666;">
-                                            Start typing to search for users
-                                        </div>
+                                    <div id="searchResults" class="search-results max-h-72 overflow-y-auto border border-gray-200 rounded mt-4">
+                                        <div class="text-center p-10 text-gray-500">Start typing to search for users</div>
                                     </div>
                                 </div>
-                                <div class="modal-footer">
-                                    <button class="btn-cancel" onclick="closeSearchModal()">Close</button>
+                                <div class="modal-footer p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right">
+                                    <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition" onclick="closeSearchModal()">Close</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Enrollment Search Modal -->
-                        <div id="enrollmentSearchModal" class="modal-overlay">
-                            <div class="modal-container" style="max-width: 700px;">
-                                <div class="modal-header">
-                                    <h3>Search Enrollees</h3>
-                                    <button class="modal-close" onclick="closeEnrollmentSearchModal()">×</button>
+                        <div id="enrollmentSearchModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[1000]">
+                            <div class="modal-container bg-white rounded-lg w-[90%] max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
+                                <div class="modal-header p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center">
+                                    <h3 class="text-xl font-semibold text-[#0a2d63]">Search Enrollees</h3>
+                                    <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeEnrollmentSearchModal()">×</button>
                                 </div>
-                                <div class="modal-body">
+                                <div class="modal-body p-6">
                                     <!-- Search Input -->
-                                    <div class="form-group">
-                                        <label>Search by name, email, or phone</label>
-                                        <input type="text" id="enrollmentSearchInput" placeholder="Type to search..." onkeyup="filterEnrollments()">
+                                    <div class="form-group mb-4">
+                                        <label class="block mb-2 font-medium text-gray-700">Search by name, email, or phone</label>
+                                        <input type="text" id="enrollmentSearchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded" onkeyup="filterEnrollments()">
                                     </div>
 
                                     <!-- Status Filters -->
-                                    <div class="filter-section">
-                                        <h4>Filter by Status</h4>
-                                        <div class="checkbox-group">
-                                            <div class="checkbox-item">
+                                    <div class="filter-section bg-gray-50 p-4 rounded mb-4">
+                                        <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Filter by Status</h4>
+                                        <div class="checkbox-group flex flex-wrap gap-4">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterPending" value="pending" onchange="filterEnrollments()" checked>
-                                                <label for="filterPending">Pending</label>
+                                                <label for="filterPending" class="text-sm text-gray-700">Pending</label>
                                             </div>
-                                            <div class="checkbox-item">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterApproved" value="approved" onchange="filterEnrollments()" checked>
-                                                <label for="filterApproved">Approved</label>
+                                                <label for="filterApproved" class="text-sm text-gray-700">Approved</label>
                                             </div>
-                                            <div class="checkbox-item">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterNeedsDocs" value="needs_docs" onchange="filterEnrollments()" checked>
-                                                <label for="filterNeedsDocs">Needs Documents</label>
+                                                <label for="filterNeedsDocs" class="text-sm text-gray-700">Needs Documents</label>
                                             </div>
-                                            <div class="checkbox-item">
+                                            <div class="checkbox-item flex items-center gap-2">
                                                 <input type="checkbox" id="filterRejected" value="rejected" onchange="filterEnrollments()" checked>
-                                                <label for="filterRejected">Rejected</label>
+                                                <label for="filterRejected" class="text-sm text-gray-700">Rejected</label>
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Results Per Page -->
-                                    <div class="filter-section">
-                                        <h4>Results Per Page</h4>
-                                        <div class="custom-per-page" style="margin-top: 10px;">
-                                            <select id="enrollmentPerPage" onchange="changeEnrollmentPerPage()">
+                                    <div class="filter-section bg-gray-50 p-4 rounded mb-4">
+                                        <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Results Per Page</h4>
+                                        <div class="custom-per-page flex items-center gap-2 mt-2">
+                                            <select id="enrollmentPerPage" class="border border-gray-300 rounded px-2 py-1 text-sm" onchange="changeEnrollmentPerPage()">
                                                 <option value="10">10</option>
                                                 <option value="25">25</option>
                                                 <option value="50">50</option>
@@ -1853,82 +704,76 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                                 <option value="100">100</option>
                                                 <option value="custom">Custom</option>
                                             </select>
-                                            <div id="enrollmentCustomPerPage" style="display: none;">
-                                                <input type="number" id="enrollmentCustomNumber" min="1" max="500" placeholder="Number">
-                                                <button onclick="applyEnrollmentCustomPerPage()">Apply</button>
+                                            <div id="enrollmentCustomPerPage" class="hidden flex items-center gap-2">
+                                                <input type="number" id="enrollmentCustomNumber" min="1" max="500" placeholder="Number" class="border border-gray-300 rounded px-2 py-1 w-20 text-sm">
+                                                <button onclick="applyEnrollmentCustomPerPage()" class="bg-[#0a2d63] text-white px-3 py-1 rounded text-sm">Apply</button>
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Search Results -->
-                                    <div id="enrollmentSearchResults" class="search-results" style="max-height: 400px;">
-                                        <div style="text-align: center; padding: 40px; color: #666;">
-                                            Loading enrollments...
-                                        </div>
+                                    <div id="enrollmentSearchResults" class="search-results max-h-96 overflow-y-auto border border-gray-200 rounded">
+                                        <div class="text-center p-10 text-gray-500">Loading enrollments...</div>
                                     </div>
 
                                     <!-- Pagination for Search Results -->
-                                    <div id="enrollmentSearchPagination" class="pagination-controls" style="margin-top: 15px; display: none;">
-                                        <div class="pagination-info" id="enrollmentSearchInfo"></div>
-                                        <div class="pagination-buttons" id="enrollmentSearchButtons"></div>
+                                    <div id="enrollmentSearchPagination" class="pagination-controls hidden mt-4 p-4 bg-gray-50 rounded flex flex-col md:flex-row items-center gap-4">
+                                        <div class="pagination-info text-sm text-gray-600" id="enrollmentSearchInfo"></div>
+                                        <div class="pagination-buttons flex gap-1" id="enrollmentSearchButtons"></div>
                                     </div>
                                 </div>
-                                <div class="modal-footer">
-                                    <button class="btn-cancel" onclick="closeEnrollmentSearchModal()">Close</button>
+                                <div class="modal-footer p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right">
+                                    <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition" onclick="closeEnrollmentSearchModal()">Close</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Document View Modal -->
-                        <div id="documentModal" class="modal-overlay">
-                            <div class="modal-container" style="max-width: 800px;">
-                                <div class="modal-header">
-                                    <h3>Student Documents</h3>
-                                    <button class="modal-close" onclick="closeDocumentModal()">×</button>
+                        <div id="documentModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[1000]">
+                            <div class="modal-container bg-white rounded-lg w-[90%] max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+                                <div class="modal-header p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center">
+                                    <h3 class="text-xl font-semibold text-[#0a2d63]">Student Documents</h3>
+                                    <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeDocumentModal()">×</button>
                                 </div>
-                                <div class="modal-body">
-                                    <div id="documentList" style="min-height: 200px;">
-                                        <div style="text-align: center; padding: 40px; color: #666;">
-                                            Loading documents...
-                                        </div>
+                                <div class="modal-body p-6">
+                                    <div id="documentList" class="min-h-[200px]">
+                                        <div class="text-center p-10 text-gray-500">Loading documents...</div>
                                     </div>
                                 </div>
-                                <div class="modal-footer">
-                                    <button class="btn-cancel" onclick="closeDocumentModal()">Close</button>
+                                <div class="modal-footer p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right">
+                                    <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition" onclick="closeDocumentModal()">Close</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Delete User Modal -->
-                        <div id="deleteUserModal" class="modal-overlay">
-                            <div class="modal-container" style="max-width: 600px;">
-                                <div class="modal-header">
-                                    <h3>Delete Users</h3>
-                                    <button class="modal-close" onclick="closeDeleteUserModal()">×</button>
+                        <div id="deleteUserModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[1000]">
+                            <div class="modal-container bg-white rounded-lg w-[90%] max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
+                                <div class="modal-header p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center">
+                                    <h3 class="text-xl font-semibold text-[#0a2d63]">Delete Users</h3>
+                                    <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeDeleteUserModal()">×</button>
                                 </div>
-                                <div class="modal-body">
-                                    <p style="margin-bottom: 20px; color: #666;">Select users to delete. This action cannot be undone.</p>
+                                <div class="modal-body p-6">
+                                    <p class="mb-5 text-gray-600">Select users to delete. This action cannot be undone.</p>
                                     
                                     <!-- Search within delete modal -->
-                                    <div class="form-group">
-                                        <input type="text" id="deleteSearchInput" placeholder="Search users..." onkeyup="loadDeleteUserList()">
+                                    <div class="form-group mb-4">
+                                        <input type="text" id="deleteSearchInput" placeholder="Search users..." class="w-full p-2 border border-gray-300 rounded" onkeyup="loadDeleteUserList()">
                                     </div>
 
                                     <!-- User List for Deletion -->
-                                    <div id="deleteUserList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
-                                        <div style="text-align: center; padding: 40px; color: #666;">
-                                            Loading users...
-                                        </div>
+                                    <div id="deleteUserList" class="max-h-72 overflow-y-auto border border-gray-200 rounded">
+                                        <div class="text-center p-10 text-gray-500">Loading users...</div>
                                     </div>
 
                                     <!-- Selected Count -->
-                                    <div style="margin-top: 15px; font-size: 14px; color: #666;">
+                                    <div class="mt-4 text-sm text-gray-600">
                                         <span id="selectedCount">0</span> user(s) selected
                                     </div>
                                 </div>
-                                <div class="modal-footer">
-                                    <button class="btn-cancel" onclick="closeDeleteUserModal()">Cancel</button>
-                                    <button class="btn-delete" onclick="confirmDeleteUsers()">Delete Selected</button>
+                                <div class="modal-footer p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right">
+                                    <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition mr-2" onclick="closeDeleteUserModal()">Cancel</button>
+                                    <button class="bg-red-600 text-white px-5 py-2 rounded font-medium hover:bg-red-700 transition" onclick="confirmDeleteUsers()">Delete Selected</button>
                                 </div>
                             </div>
                         </div>
@@ -1936,13 +781,13 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                     <?php elseif ($userRole == 'student'): ?>
                         <!-- Student Dashboard - All cards centered -->
                         <!-- Home Card (Grades + Subjects) -->
-                        <div class="dashboard-card home-card active" id="homeCard">
-                            <div class="card-content">
-                                <div style="margin-bottom: 30px;">
-                                    <h3>Grades</h3>
-                                    <p>Check your current grades, academic performance, and progress reports.</p>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden active" id="homeCard">
+                            <div class="card-content p-8 space-y-8">
+                                <div class="space-y-4">
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63]">Grades</h3>
+                                    <p class="text-gray-600">Check your current grades, academic performance, and progress reports.</p>
                                     
-                                    <div class="grade-summary" id="gradeSummary">
+                                    <div class="grade-summary overflow-x-auto" id="gradeSummary">
                                         <?php if (!empty($grades)): ?>
                                             <?php
                                             // Group grades by subject
@@ -1971,28 +816,28 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                             }
                                             ?>
                                             
-                                            <table class="grades-table">
-                                                <thead>
+                                            <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden mt-4">
+                                                <thead class="bg-[#0a2d63] text-white">
                                                     <tr>
-                                                        <th>Subject</th>
-                                                        <th>Q1</th>
-                                                        <th>Q2</th>
-                                                        <th>Q3</th>
-                                                        <th>Q4</th>
-                                                        <th>Average</th>
+                                                        <th class="p-4 text-left font-semibold">Subject</th>
+                                                        <th class="p-4 text-center font-semibold">Q1</th>
+                                                        <th class="p-4 text-center font-semibold">Q2</th>
+                                                        <th class="p-4 text-center font-semibold">Q3</th>
+                                                        <th class="p-4 text-center font-semibold">Q4</th>
+                                                        <th class="p-4 text-center font-semibold">Average</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     <?php foreach ($groupedGrades as $subjectName => $data): ?>
-                                                    <tr>
-                                                        <td><?php echo htmlspecialchars($subjectName); ?></td>
-                                                        <td><?php echo isset($data['quarters'][1]) ? $data['quarters'][1] : '-'; ?></td>
-                                                        <td><?php echo isset($data['quarters'][2]) ? $data['quarters'][2] : '-'; ?></td>
-                                                        <td><?php echo isset($data['quarters'][3]) ? $data['quarters'][3] : '-'; ?></td>
-                                                        <td><?php echo isset($data['quarters'][4]) ? $data['quarters'][4] : '-'; ?></td>
-                                                        <td>
+                                                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                                                        <td class="p-4 font-semibold text-gray-800"><?php echo htmlspecialchars($subjectName); ?></td>
+                                                        <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][1]) ? $data['quarters'][1] : '-'; ?></td>
+                                                        <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][2]) ? $data['quarters'][2] : '-'; ?></td>
+                                                        <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][3]) ? $data['quarters'][3] : '-'; ?></td>
+                                                        <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][4]) ? $data['quarters'][4] : '-'; ?></td>
+                                                        <td class="p-4 text-center">
                                                             <?php if ($data['average'] > 0): ?>
-                                                                <span class="grade-score"><?php echo $data['average']; ?></span>
+                                                                <span class="grade-score inline-block bg-green-600 text-white font-semibold py-2 px-4 rounded min-w-[50px]"><?php echo $data['average']; ?></span>
                                                             <?php else: ?>
                                                                 -
                                                             <?php endif; ?>
@@ -2003,22 +848,20 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                             </table>
                                             
                                         <?php else: ?>
-                                            <table class="grades-table">
-                                                <thead>
+                                            <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden mt-4">
+                                                <thead class="bg-[#0a2d63] text-white">
                                                     <tr>
-                                                        <th>Subject</th>
-                                                        <th>Q1</th>
-                                                        <th>Q2</th>
-                                                        <th>Q3</th>
-                                                        <th>Q4</th>
-                                                        <th>Average</th>
+                                                        <th class="p-4 text-left font-semibold">Subject</th>
+                                                        <th class="p-4 text-center font-semibold">Q1</th>
+                                                        <th class="p-4 text-center font-semibold">Q2</th>
+                                                        <th class="p-4 text-center font-semibold">Q3</th>
+                                                        <th class="p-4 text-center font-semibold">Q4</th>
+                                                        <th class="p-4 text-center font-semibold">Average</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     <tr>
-                                                        <td colspan="6" style="text-align: center; padding: 40px; color: #666;">
-                                                            No grades available yet. Check back later.
-                                                        </td>
+                                                        <td colspan="6" class="p-10 text-center text-gray-500">No grades available yet. Check back later.</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -2026,63 +869,63 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                     </div>
                                 </div>
                                 
-                                <div style="margin-top: 40px; border-top: 2px solid #e0e0e0; padding-top: 30px;">
-                                    <div class="subjects-header">
+                                <div class="space-y-4 border-t-2 border-gray-200 pt-8">
+                                    <div class="subjects-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-gray-200">
                                         <div>
-                                            <h3>Subjects for Today</h3>
+                                            <h3 class="text-2xl font-semibold text-[#0a2d63]">Subjects for Today</h3>
                                         </div>
-                                        <button class="view-all-btn" onclick="toggleHomeSubjects()">View All Subjects</button>
+                                        <button class="view-all-btn bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition" onclick="toggleHomeSubjects()">View All Subjects</button>
                                     </div>
-                                    <p>Your scheduled subjects for today.</p>
+                                    <p class="text-gray-600">Your scheduled subjects for today.</p>
                                     
-                                    <div class="subject-list" id="todaySubjectList">
+                                    <div class="subject-list space-y-4" id="todaySubjectList">
                                         <?php if (!empty($todaySubjects)): ?>
                                             <?php foreach ($todaySubjects as $subject): ?>
-                                                <div class="subject-item">
-                                                    <h4><?php echo htmlspecialchars($subject['subject_name'] ?? ''); ?> <span class="today-badge">TODAY</span></h4>
-                                                    <p><strong>Schedule:</strong> <?php echo htmlspecialchars($subject['schedule'] ?? 'Schedule not set'); ?></p>
+                                                <div class="subject-item bg-gray-50 p-5 hover:bg-gray-100 transition">
+                                                    <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subject['subject_name'] ?? ''); ?> <span class="today-badge bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded ml-2 align-middle">TODAY</span></h4>
+                                                    <p class="text-gray-600"><strong>Schedule:</strong> <?php echo htmlspecialchars($subject['schedule'] ?? 'Schedule not set'); ?></p>
                                                     <?php if (!empty($subject['description'])): ?>
-                                                        <p class="description"><?php echo htmlspecialchars($subject['description']); ?></p>
+                                                        <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subject['description']); ?></p>
                                                     <?php endif; ?>
                                                 </div>
                                             <?php endforeach; ?>
                                         <?php else: ?>
-                                            <div class="no-subjects-today">
-                                                <h4>No subjects scheduled for today</h4>
-                                                <p>You have no classes scheduled for <?php echo $currentDay; ?>.</p>
-                                                <p>Click "View All Subjects" to see your complete weekly schedule.</p>
+                                            <div class="no-subjects-today text-center p-8 bg-gray-50 rounded">
+                                                <h4 class="text-lg font-semibold text-[#0a2d63] mb-2">No subjects scheduled for today</h4>
+                                                <p class="text-gray-600">You have no classes scheduled for <?php echo $currentDay; ?>.</p>
+                                                <p class="text-gray-600">Click "View All Subjects" to see your complete weekly schedule.</p>
                                             </div>
                                         <?php endif; ?>
                                     </div>
                                     
-                                    <div class="subject-list" id="allSubjectList" style="display: none;">
+                                    <div class="subject-list hidden space-y-4" id="allSubjectList">
                                         <?php if (!empty($allSubjects)): ?>
                                             <?php foreach ($allSubjects as $subjectName => $subjectData): ?>
-                                                <div class="subject-item">
-                                                    <h4><?php echo htmlspecialchars($subjectData['subject_name']); ?></h4>
-                                                    <p><strong>Code:</strong> <?php echo htmlspecialchars($subjectData['subject_code'] ?? ''); ?></p>
-                                                    <p><strong>Semester:</strong> <?php echo htmlspecialchars($subjectData['semester'] ?? ''); ?></p>
+                                                <div class="subject-item bg-gray-50 p-5 hover:bg-gray-100 transition">
+                                                    <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subjectData['subject_name']); ?></h4>
+                                                    <p class="text-gray-600"><strong>Code:</strong> <?php echo htmlspecialchars($subjectData['subject_code'] ?? ''); ?></p>
+                                                    <p class="text-gray-600"><strong>Semester:</strong> <?php echo htmlspecialchars($subjectData['semester'] ?? ''); ?></p>
                                                     
-                                                    <div class="schedule-list">
-                                                        <p><strong>All Schedules:</strong></p>
+                                                    <div class="schedule-list mt-2 pl-4">
+                                                        <p class="font-medium text-gray-700">All Schedules:</p>
                                                         <?php foreach ($subjectData['schedules'] as $schedule): ?>
-                                                            <div class="schedule-item">
-                                                                <span class="day"><?php echo htmlspecialchars($schedule['day_of_week']); ?>:</span>
-                                                                <span class="time"><?php echo htmlspecialchars($schedule['start_time_formatted']); ?> - <?php echo htmlspecialchars($schedule['end_time_formatted']); ?></span>
+                                                            <div class="schedule-item text-sm text-gray-600">
+                                                                <span class="day font-semibold text-[#0a2d63]"><?php echo htmlspecialchars($schedule['day_of_week']); ?>:</span>
+                                                                <span class="time text-gray-500"><?php echo htmlspecialchars($schedule['start_time_formatted']); ?> - <?php echo htmlspecialchars($schedule['end_time_formatted']); ?></span>
                                                             </div>
                                                         <?php endforeach; ?>
                                                     </div>
                                                     
                                                     <?php if (!empty($subjectData['description'])): ?>
-                                                        <p class="description"><?php echo htmlspecialchars($subjectData['description']); ?></p>
+                                                        <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subjectData['description']); ?></p>
                                                     <?php endif; ?>
                                                 </div>
                                             <?php endforeach; ?>
                                         <?php else: ?>
-                                            <div class="subject-item">
-                                                <h4>No subjects enrolled for your section</h4>
-                                                <p>Grade Level: <?php echo htmlspecialchars($gradeLevel); ?> | Section: <?php echo htmlspecialchars($section); ?></p>
-                                                <p class="description">Contact your advisor if you believe this is incorrect.</p>
+                                            <div class="subject-item bg-gray-50 p-5">
+                                                <h4 class="text-lg font-semibold text-[#0a2d63] mb-2">No subjects enrolled for your section</h4>
+                                                <p class="text-gray-600">Grade Level: <?php echo htmlspecialchars($gradeLevel); ?> | Section: <?php echo htmlspecialchars($section); ?></p>
+                                                <p class="description text-gray-500 italic mt-2">Contact your advisor if you believe this is incorrect.</p>
                                             </div>
                                         <?php endif; ?>
                                     </div>
@@ -2091,12 +934,14 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         </div>
 
                         <!-- Grades Card -->
-                        <div class="dashboard-card grades-card" id="gradesCard">
-                            <div class="card-content">
-                                <h3>Grades</h3>
-                                <p>Check your current grades, academic performance, and progress reports.</p>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="gradesCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Grades</h3>
+                                    <p class="text-gray-600">Check your current grades, academic performance, and progress reports.</p>
+                                </div>
                                 
-                                <div class="grade-summary">
+                                <div class="grade-summary overflow-x-auto">
                                     <?php if (!empty($grades)): ?>
                                         <?php
                                         // Group grades by subject
@@ -2125,28 +970,28 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                         }
                                         ?>
                                         
-                                        <table class="grades-table">
-                                            <thead>
+                                        <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden mt-4">
+                                            <thead class="bg-[#0a2d63] text-white">
                                                 <tr>
-                                                    <th>Subject</th>
-                                                    <th>Q1</th>
-                                                    <th>Q2</th>
-                                                    <th>Q3</th>
-                                                    <th>Q4</th>
-                                                    <th>Average</th>
+                                                    <th class="p-4 text-left font-semibold">Subject</th>
+                                                    <th class="p-4 text-center font-semibold">Q1</th>
+                                                    <th class="p-4 text-center font-semibold">Q2</th>
+                                                    <th class="p-4 text-center font-semibold">Q3</th>
+                                                    <th class="p-4 text-center font-semibold">Q4</th>
+                                                    <th class="p-4 text-center font-semibold">Average</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <?php foreach ($groupedGrades as $subjectName => $data): ?>
-                                                <tr>
-                                                    <td><?php echo htmlspecialchars($subjectName); ?></td>
-                                                    <td><?php echo isset($data['quarters'][1]) ? $data['quarters'][1] : '-'; ?></td>
-                                                    <td><?php echo isset($data['quarters'][2]) ? $data['quarters'][2] : '-'; ?></td>
-                                                    <td><?php echo isset($data['quarters'][3]) ? $data['quarters'][3] : '-'; ?></td>
-                                                    <td><?php echo isset($data['quarters'][4]) ? $data['quarters'][4] : '-'; ?></td>
-                                                    <td>
+                                                <tr class="border-b border-gray-200 hover:bg-gray-50">
+                                                    <td class="p-4 font-semibold text-gray-800"><?php echo htmlspecialchars($subjectName); ?></td>
+                                                    <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][1]) ? $data['quarters'][1] : '-'; ?></td>
+                                                    <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][2]) ? $data['quarters'][2] : '-'; ?></td>
+                                                    <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][3]) ? $data['quarters'][3] : '-'; ?></td>
+                                                    <td class="p-4 text-center text-gray-700"><?php echo isset($data['quarters'][4]) ? $data['quarters'][4] : '-'; ?></td>
+                                                    <td class="p-4 text-center">
                                                         <?php if ($data['average'] > 0): ?>
-                                                            <span class="grade-score"><?php echo $data['average']; ?></span>
+                                                            <span class="grade-score inline-block bg-green-600 text-white font-semibold py-2 px-4 rounded min-w-[50px]"><?php echo $data['average']; ?></span>
                                                         <?php else: ?>
                                                             -
                                                         <?php endif; ?>
@@ -2157,22 +1002,20 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                         </table>
                                         
                                     <?php else: ?>
-                                        <table class="grades-table">
-                                            <thead>
+                                        <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden mt-4">
+                                            <thead class="bg-[#0a2d63] text-white">
                                                 <tr>
-                                                    <th>Subject</th>
-                                                    <th>Q1</th>
-                                                    <th>Q2</th>
-                                                    <th>Q3</th>
-                                                    <th>Q4</th>
-                                                    <th>Average</th>
+                                                    <th class="p-4 text-left font-semibold">Subject</th>
+                                                    <th class="p-4 text-center font-semibold">Q1</th>
+                                                    <th class="p-4 text-center font-semibold">Q2</th>
+                                                    <th class="p-4 text-center font-semibold">Q3</th>
+                                                    <th class="p-4 text-center font-semibold">Q4</th>
+                                                    <th class="p-4 text-center font-semibold">Average</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    <td colspan="6" style="text-align: center; padding: 40px; color: #666;">
-                                                        No grades available yet. Check back later.
-                                                    </td>
+                                                    <td colspan="6" class="p-10 text-center text-gray-500">No grades available yet. Check back later.</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -2182,66 +1025,66 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         </div>
 
                         <!-- Subjects Card -->
-                        <div class="dashboard-card subjects-card" id="subjectsCard">
-                            <div class="card-content">
-                                <div class="subjects-header">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="subjectsCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div class="subjects-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-gray-200">
                                     <div>
-                                        <h3>Today's Subjects</h3>
+                                        <h3 class="text-2xl font-semibold text-[#0a2d63]">Today's Subjects</h3>
                                     </div>
-                                    <button class="view-all-btn" onclick="toggleSubjectCard()" id="subjectsCardBtn">View All Subjects</button>
+                                    <button class="view-all-btn bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition" onclick="toggleSubjectCard()" id="subjectsCardBtn">View All Subjects</button>
                                 </div>
-                                <p>Your subjects scheduled for today.</p>
+                                <p class="text-gray-600">Your subjects scheduled for today.</p>
                                 
                                 <!-- Today's Subjects (shown by default) -->
-                                <div class="subject-list" id="todaySubjectsCardList">
+                                <div class="subject-list space-y-4" id="todaySubjectsCardList">
                                     <?php if (!empty($todaySubjects)): ?>
                                         <?php foreach ($todaySubjects as $subject): ?>
-                                            <div class="subject-item">
-                                                <h4><?php echo htmlspecialchars($subject['subject_name'] ?? ''); ?> <span class="today-badge">TODAY</span></h4>
-                                                <p><strong>Schedule:</strong> <?php echo htmlspecialchars($subject['schedule'] ?? 'Schedule not set'); ?></p>
+                                            <div class="subject-item bg-gray-50 p-5 hover:bg-gray-100 transition">
+                                                <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subject['subject_name'] ?? ''); ?> <span class="today-badge bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded ml-2 align-middle">TODAY</span></h4>
+                                                <p class="text-gray-600"><strong>Schedule:</strong> <?php echo htmlspecialchars($subject['schedule'] ?? 'Schedule not set'); ?></p>
                                                 <?php if (!empty($subject['description'])): ?>
-                                                    <p class="description"><?php echo htmlspecialchars($subject['description']); ?></p>
+                                                    <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subject['description']); ?></p>
                                                 <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <div class="no-subjects-today">
-                                            <h4>No subjects scheduled for today</h4>
-                                            <p>You have no classes scheduled for <?php echo $currentDay; ?>.</p>
-                                            <p>Click "View All Subjects" to see your complete weekly schedule.</p>
+                                        <div class="no-subjects-today text-center p-8 bg-gray-50 rounded">
+                                            <h4 class="text-lg font-semibold text-[#0a2d63] mb-2">No subjects scheduled for today</h4>
+                                            <p class="text-gray-600">You have no classes scheduled for <?php echo $currentDay; ?>.</p>
+                                            <p class="text-gray-600">Click "View All Subjects" to see your complete weekly schedule.</p>
                                         </div>
                                     <?php endif; ?>
                                 </div>
                                 
                                 <!-- All Subjects (hidden by default) -->
-                                <div class="subject-list" id="allSubjectsCardList" style="display: none;">
+                                <div class="subject-list hidden space-y-4" id="allSubjectsCardList">
                                     <?php if (!empty($allSubjects)): ?>
                                         <?php foreach ($allSubjects as $subjectName => $subjectData): ?>
-                                            <div class="subject-item">
-                                                <h4><?php echo htmlspecialchars($subjectData['subject_name']); ?></h4>
-                                                <p><strong>Code:</strong> <?php echo htmlspecialchars($subjectData['subject_code'] ?? ''); ?></p>
-                                                <p><strong>Semester:</strong> <?php echo htmlspecialchars($subjectData['semester'] ?? ''); ?></p>
+                                            <div class="subject-item bg-gray-50 p-5 hover:bg-gray-100 transition">
+                                                <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subjectData['subject_name']); ?></h4>
+                                                <p class="text-gray-600"><strong>Code:</strong> <?php echo htmlspecialchars($subjectData['subject_code'] ?? ''); ?></p>
+                                                <p class="text-gray-600"><strong>Semester:</strong> <?php echo htmlspecialchars($subjectData['semester'] ?? ''); ?></p>
                                                 
-                                                <div class="schedule-list">
-                                                    <p><strong>All Schedules:</strong></p>
+                                                <div class="schedule-list mt-2 pl-4">
+                                                    <p class="font-medium text-gray-700">All Schedules:</p>
                                                     <?php foreach ($subjectData['schedules'] as $schedule): ?>
-                                                        <div class="schedule-item">
-                                                            <span class="day"><?php echo htmlspecialchars($schedule['day_of_week']); ?>:</span>
-                                                            <span class="time"><?php echo htmlspecialchars($schedule['start_time_formatted']); ?> - <?php echo htmlspecialchars($schedule['end_time_formatted']); ?></span>
+                                                        <div class="schedule-item text-sm text-gray-600">
+                                                            <span class="day font-semibold text-[#0a2d63]"><?php echo htmlspecialchars($schedule['day_of_week']); ?>:</span>
+                                                            <span class="time text-gray-500"><?php echo htmlspecialchars($schedule['start_time_formatted']); ?> - <?php echo htmlspecialchars($schedule['end_time_formatted']); ?></span>
                                                         </div>
                                                     <?php endforeach; ?>
                                                 </div>
                                                 
                                                 <?php if (!empty($subjectData['description'])): ?>
-                                                    <p class="description"><?php echo htmlspecialchars($subjectData['description']); ?></p>
+                                                    <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subjectData['description']); ?></p>
                                                 <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <div class="subject-item">
-                                            <h4>No subjects enrolled for your section</h4>
-                                            <p>Grade Level: <?php echo htmlspecialchars($gradeLevel); ?> | Section: <?php echo htmlspecialchars($section); ?></p>
-                                            <p class="description">Contact your advisor if you believe this is incorrect.</p>
+                                        <div class="subject-item bg-gray-50 p-5">
+                                            <h4 class="text-lg font-semibold text-[#0a2d63] mb-2">No subjects enrolled for your section</h4>
+                                            <p class="text-gray-600">Grade Level: <?php echo htmlspecialchars($gradeLevel); ?> | Section: <?php echo htmlspecialchars($section); ?></p>
+                                            <p class="description text-gray-500 italic mt-2">Contact your advisor if you believe this is incorrect.</p>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -2249,15 +1092,17 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         </div>
 
                         <!-- Events Card -->
-                        <div class="dashboard-card events-card" id="eventsCard">
-                            <div class="card-content">
-                                <h3>Upcoming School Events</h3>
-                                <p>View upcoming school events, activities, and important dates for the next 15 days.</p>
-                                <div class="event-list" id="eventList">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="eventsCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Upcoming School Events</h3>
+                                    <p class="text-gray-600">View upcoming school events, activities, and important dates for the next 15 days.</p>
+                                </div>
+                                <div class="event-list space-y-4 max-h-[400px] overflow-y-auto pr-2" id="eventList">
                                     <?php if (!empty($events)): ?>
                                         <?php foreach ($events as $event): ?>
-                                            <div class="event-item">
-                                                <div class="event-date">
+                                            <div class="event-item bg-gray-50 p-5 hover:bg-gray-100 transition animate-slideIn">
+                                                <div class="event-date bg-[#0a2d63] text-white px-4 py-2 rounded inline-block mb-3 font-semibold text-sm min-w-[200px] text-center">
                                                     <?php 
                                                     $eventDate = new DateTime($event['event_date']);
                                                     $today = new DateTime();
@@ -2278,21 +1123,21 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                                     ?>
                                                 </div>
                                                 <div class="event-details">
-                                                    <h4><?php echo htmlspecialchars($event['event_name']); ?></h4>
+                                                    <h4 class="text-lg font-semibold text-[#0a2d63] mb-2"><?php echo htmlspecialchars($event['event_name']); ?></h4>
                                                     <?php if (!empty($event['description'])): ?>
-                                                        <p><?php echo htmlspecialchars($event['description']); ?></p>
+                                                        <p class="text-gray-600 text-sm mb-1"><?php echo htmlspecialchars($event['description']); ?></p>
                                                     <?php endif; ?>
                                                     <?php if (!empty($event['responsible_dept'])): ?>
-                                                        <p><?php echo htmlspecialchars($event['responsible_dept']); ?></p>
+                                                        <p class="text-gray-500 text-sm"><?php echo htmlspecialchars($event['responsible_dept']); ?></p>
                                                     <?php endif; ?>
                                                 </div>
                                             </div>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <div class="event-item no-events-message">
+                                        <div class="event-item bg-gray-50 p-5 no-events-message">
                                             <div class="event-details">
-                                                <h4>No upcoming events in the next 15 days</h4>
-                                                <p>Check back later for upcoming events.</p>
+                                                <h4 class="text-lg font-semibold text-[#0a2d63] mb-2">No upcoming events in the next 15 days</h4>
+                                                <p class="text-gray-600">Check back later for upcoming events.</p>
                                             </div>
                                         </div>
                                     <?php endif; ?>
@@ -2301,114 +1146,94 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         </div>
 
                         <!-- Payables Card -->
-                        <div class="dashboard-card payables-card" id="payablesCard">
-                            <div class="card-content">
-                                <h3>Payables</h3>
-                                <p>View your tuition fees, payment history, and outstanding balances.</p>
-                                <div class="payable-list" id="payableList">
-                                    <div class="loading">Loading payables...</div>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="payablesCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Payables</h3>
+                                    <p class="text-gray-600">View your tuition fees, payment history, and outstanding balances.</p>
+                                </div>
+                                <div class="payable-list space-y-4" id="payableList">
+                                    <div class="loading text-center text-gray-500 py-10">Loading payables...</div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Profile Card -->
-                        <div class="dashboard-card profile-card" id="profileCard">
-                            <div class="card-content">
-                                <h3>Profile</h3>
-                                <p>View and update your personal information.</p>
-                                <div class="profile-info" id="profileInfo">
-                                    <div class="info-item">
-                                        <span class="label">Full Name:</span>
-                                        <span class="value"><?php echo htmlspecialchars($fullName); ?></span>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="profileCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Profile</h3>
+                                    <p class="text-gray-600">View and update your personal information.</p>
+                                </div>
+                                <div class="profile-info bg-gray-50 p-8 space-y-4" id="profileInfo">
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">Full Name:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($fullName); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">Username:</span>
-                                        <span class="value"><?php echo htmlspecialchars($userName); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">Username:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($userName); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">User Role:</span>
-                                        <span class="value"><?php echo htmlspecialchars(ucfirst($userRole)); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">User Role:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars(ucfirst($userRole)); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">Grade Level:</span>
-                                        <span class="value"><?php echo htmlspecialchars($gradeLevel); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">Grade Level:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($gradeLevel); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">Section:</span>
-                                        <span class="value"><?php echo htmlspecialchars($section); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">Section:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($section); ?></span>
                                     </div>
-                                    <div class="info-item">
-                                        <span class="label">LRN:</span>
-                                        <span class="value"><?php echo htmlspecialchars($lrn); ?></span>
+                                    <div class="info-item flex justify-between items-center py-4 border-b border-gray-200 last:border-0">
+                                        <span class="label font-semibold text-gray-800">LRN:</span>
+                                        <span class="value text-gray-600"><?php echo htmlspecialchars($lrn); ?></span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Announcements Card -->
-                        <div class="dashboard-card announcements-card" id="announcementsCard">
-                            <div class="card-content">
-                                <h3>Announcements</h3>
-                                <p>Latest school announcements and updates.</p>
-                                <div class="announcement-list" id="announcementList">
-                                    <div class="loading">Loading announcements...</div>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="announcementsCard">
+                                <div class="card-content p-8 space-y-6 w-full"></div>
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Announcements</h3>
+                                    <p class="text-gray-600">Latest school announcements and updates.</p>
+                                </div>
+                                <div class="announcement-list space-y-4" id="announcementList">
+                                    <div class="loading text-center text-gray-500 py-10">Loading announcements...</div>
                                 </div>
                             </div>
                         </div>
 
                     <?php elseif ($userRole == 'teacher'): ?>
                         <!-- Teacher Dashboard -->
-                        <div class="dashboard-card teacher-card active" id="teacherCard">
-                            <div class="card-content">
-                                <h3>Teacher Dashboard</h3>
-                                <p>Welcome, <?php echo htmlspecialchars($fullName); ?>!</p>
-                                <div class="teacher-actions">
-                                    <a href="teacher_grades.php" class="action-btn">Encode Grades</a>
-                                    <a href="teacher_subjects.php" class="action-btn">My Subjects</a>
-                                    <a href="teacher_students.php" class="action-btn">My Students</a>
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden active" id="teacherCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Teacher Dashboard</h3>
+                                    <p class="text-gray-600">Welcome, <?php echo htmlspecialchars($fullName); ?>!</p>
+                                </div>
+                                <div class="teacher-actions flex flex-col sm:flex-row gap-4 mt-5">
+                                    <a href="teacher_grades.php" class="action-btn bg-[#0a2d63] text-white px-6 py-3 rounded font-medium hover:bg-[#08306b] hover:-translate-y-0.5 transition inline-block text-center">Encode Grades</a>
+                                    <a href="teacher_subjects.php" class="action-btn bg-[#0a2d63] text-white px-6 py-3 rounded font-medium hover:bg-[#08306b] hover:-translate-y-0.5 transition inline-block text-center">My Subjects</a>
+                                    <a href="teacher_students.php" class="action-btn bg-[#0a2d63] text-white px-6 py-3 rounded font-medium hover:bg-[#08306b] hover:-translate-y-0.5 transition inline-block text-center">My Students</a>
                                 </div>
                             </div>
                         </div>
                     <?php endif; ?>
                 </div>
             </div>
-
         </div>
     </div>
+
+    <!-- Keep existing JavaScript (unchanged) -->
     <script src="js/script.js"></script>
     <script>
-        // JavaScript to update the clock every second
-        function updateLiveClock() {
-            const now = new Date();
-            const options = { timeZone: 'Asia/Manila' };
-            
-            // Get time
-            const timeStr = now.toLocaleTimeString('en-US', { 
-                hour12: true,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                ...options
-            });
-            
-            // Get date
-            const dateStr = now.toLocaleDateString('en-US', { 
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-                ...options
-            });
-            
-            const clockElement = document.getElementById('liveClock');
-            if (clockElement) {
-                const timeElement = clockElement.querySelector('.time');
-                const dateElement = clockElement.querySelector('.date');
-                
-                if (timeElement) timeElement.textContent = timeStr;
-                if (dateElement) dateElement.textContent = dateStr;
-            }
-        }
-
+        // JavaScript to update the clock every second (removed)
+        // (Clock has been removed from UI, but we can keep function if needed elsewhere)
+        
         // Toggle between today's subjects and all subjects in Home Card
         function toggleHomeSubjects() {
             const todayList = document.getElementById('todaySubjectList');
@@ -2547,7 +1372,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         function loadPayables() {
             // Clear previous content first
             const payableList = document.getElementById('payableList');
-            payableList.innerHTML = '<div class="loading">Loading payables...</div>';
+            payableList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading payables...</div>';
         
             // Add timestamp to prevent caching
             const timestamp = new Date().getTime();
@@ -2567,15 +1392,15 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                             } else if (payable.status === 'partially_paid') {
                                 // Show partially paid status
                                 html += `
-                                    <div class="payable-item">
-                                        <div class="payable-details">
-                                            <h4>${payable.item_name}</h4>
-                                            <p style="margin: 5px 0; color: #666;">Due: <span class="payable-date">${dueDate.toLocaleDateString()}</span></p>
-                                            <p style="margin: 5px 0; color: #3b82f6; font-size: 13px;">Partially Paid</p>
+                                    <div class="payable-item bg-gray-50 p-6 hover:bg-gray-100 transition flex flex-col md:flex-row justify-between items-start md:items-center">
+                                        <div class="payable-details flex-1">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">${payable.item_name}</h4>
+                                            <p class="text-gray-600 mb-2">Due: <span class="payable-date bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm">${dueDate.toLocaleDateString()}</span></p>
+                                            <p class="text-blue-600 text-sm">Partially Paid</p>
                                         </div>
-                                        <div class="payable-amount">
-                                            <div class="payable-total">₱${parseFloat(payable.amount).toLocaleString()}</div>
-                                            <div class="payable-status" style="background: #dbeafe; color: #1d4ed8;">Partially Paid</div>
+                                        <div class="payable-amount text-right min-w-[150px]">
+                                            <div class="payable-total font-bold text-xl text-[#0a2d63]">₱${parseFloat(payable.amount).toLocaleString()}</div>
+                                            <div class="payable-status bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm inline-block">Partially Paid</div>
                                         </div>
                                     </div>
                                 `;
@@ -2583,14 +1408,14 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                 const isOverdue = dueDate < today;
                                 
                                 html += `
-                                    <div class="payable-item">
-                                        <div class="payable-details">
-                                            <h4>${payable.item_name}</h4>
-                                            <p style="margin: 5px 0; color: #666;">Due: <span class="payable-date">${dueDate.toLocaleDateString()}</span></p>
+                                    <div class="payable-item bg-gray-50 p-6 hover:bg-gray-100 transition flex flex-col md:flex-row justify-between items-start md:items-center">
+                                        <div class="payable-details flex-1">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">${payable.item_name}</h4>
+                                            <p class="text-gray-600 mb-2">Due: <span class="payable-date bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm">${dueDate.toLocaleDateString()}</span></p>
                                         </div>
-                                        <div class="payable-amount">
-                                            <div class="payable-total">₱${parseFloat(payable.amount).toLocaleString()}</div>
-                                            <div class="payable-status" style="background: ${isOverdue ? '#fee2e2' : '#fff3cd'}; color: ${isOverdue ? '#dc2626' : '#856404'};">${isOverdue ? 'Overdue' : 'Pending'}</div>
+                                        <div class="payable-amount text-right min-w-[150px]">
+                                            <div class="payable-total font-bold text-xl text-[#0a2d63]">₱${parseFloat(payable.amount).toLocaleString()}</div>
+                                            <div class="payable-status px-3 py-1 rounded text-sm inline-block ${isOverdue ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${isOverdue ? 'Overdue' : 'Pending'}</div>
                                         </div>
                                     </div>
                                 `;
@@ -2598,12 +1423,12 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         });
                         payableList.innerHTML = html;
                     } else {
-                        payableList.innerHTML = '<div style="text-align: center; color: #999; padding: 40px 20px;">No payables found.</div>';
+                        payableList.innerHTML = '<div class="text-center text-gray-400 py-10">No payables found.</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading payables:', error);
-                    payableList.innerHTML = '<div style="text-align: center; color: #999; padding: 40px 20px;">Error loading payables</div>';
+                    payableList.innerHTML = '<div class="text-center text-gray-400 py-10">Error loading payables</div>';
                 });
         }
 
@@ -2618,23 +1443,23 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         data.announcements.forEach(announcement => {
                             const created = new Date(announcement.created_at);
                             html += `
-                                <div class="announcement-item">
-                                    <div class="announcement-header">
-                                        <h4>${announcement.title}</h4>
-                                        <span class="announcement-date">${created.toLocaleDateString()}</span>
+                                <div class="announcement-item bg-gray-50 p-6 hover:bg-gray-100 transition">
+                                    <div class="announcement-header flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                                        <h4 class="text-lg font-semibold text-[#0a2d63] flex-1">${announcement.title}</h4>
+                                        <span class="announcement-date bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm whitespace-nowrap">${created.toLocaleDateString()}</span>
                                     </div>
-                                    <p>${announcement.content}</p>
+                                    <p class="text-gray-700 text-base leading-relaxed">${announcement.content}</p>
                                 </div>
                             `;
                         });
                         announcementList.innerHTML = html;
                     } else {
-                        announcementList.innerHTML = '<div style="text-align: center; color: #999; padding: 40px 20px;">No announcements available.</div>';
+                        announcementList.innerHTML = '<div class="text-center text-gray-400 py-10">No announcements available.</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading announcements:', error);
-                    document.getElementById('announcementList').innerHTML = '<div style="text-align: center; color: #999; padding: 40px 20px;">Error loading announcements</div>';
+                    document.getElementById('announcementList').innerHTML = '<div class="text-center text-gray-400 py-10">Error loading announcements</div>';
                 });
         }
 
@@ -2642,7 +1467,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         // Load and display all users
         function loadUsers() {
             const userList = document.getElementById('userList');
-            userList.innerHTML = '<div class="loading">Loading users...</div>';
+            userList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading users...</div>';
 
             fetch('php/get_users.php')
                 .then(response => response.json())
@@ -2650,12 +1475,12 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                     if (data.success && data.users) {
                         displayUsers(data.users);
                     } else {
-                        userList.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Error loading users: ' + (data.message || 'Unknown error') + '</div>';
+                        userList.innerHTML = '<div class="text-center text-gray-500 py-5">Error loading users: ' + (data.message || 'Unknown error') + '</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading users:', error);
-                    userList.innerHTML = '<div style="text-align: center; padding: 20px; color: #dc2626;">Error loading users. Please try again.</div>';
+                    userList.innerHTML = '<div class="text-center text-red-600 py-5">Error loading users. Please try again.</div>';
                 });
         }
 
@@ -2663,25 +1488,25 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const userList = document.getElementById('userList');
             
             if (users.length === 0) {
-                userList.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">No users found.</div>';
+                userList.innerHTML = '<div class="text-center text-gray-500 py-5">No users found.</div>';
                 return;
             }
             
             let html = `
-                <div style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-                    <h4 style="margin-top: 0; margin-bottom: 15px; color: #0a2d63;">User List</h4>
-                    <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; background: white;">
+                <div class="mt-5 p-5 bg-gray-50 rounded">
+                    <h4 class="text-lg font-semibold text-[#0a2d63] mb-4">User List</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse bg-white">
                             <thead>
-                                <tr style="background: #0a2d63; color: white;">
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Full Name</th>
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Username</th>
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Email</th>
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Role</th>
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Grade Level</th>
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Section</th>
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">LRN</th>
-                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Created At</th>
+                                <tr class="bg-[#0a2d63] text-white">
+                                    <th class="p-3 text-left font-semibold">Full Name</th>
+                                    <th class="p-3 text-left font-semibold">Username</th>
+                                    <th class="p-3 text-left font-semibold">Email</th>
+                                    <th class="p-3 text-left font-semibold">Role</th>
+                                    <th class="p-3 text-left font-semibold">Grade Level</th>
+                                    <th class="p-3 text-left font-semibold">Section</th>
+                                    <th class="p-3 text-left font-semibold">LRN</th>
+                                    <th class="p-3 text-left font-semibold">Created At</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2690,21 +1515,20 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             users.forEach(user => {
                 const created = new Date(user.created_at).toLocaleDateString();
                 const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
+                let roleColor = user.role === 'admin' || user.role === 'super_admin' ? '#0a2d63' : (user.role === 'teacher' ? '#10b981' : '#6c757d');
                 
                 html += `
-                    <tr style="border-bottom: 1px solid #e0e0e0;">
-                        <td style="padding: 12px;">${user.full_name || 'N/A'}</td>
-                        <td style="padding: 12px;">${user.username || 'N/A'}</td>
-                        <td style="padding: 12px;">${user.email || 'N/A'}</td>
-                        <td style="padding: 12px;">
-                            <span style="background: ${user.role === 'admin' || user.role === 'super_admin' ? '#0a2d63' : user.role === 'teacher' ? '#10b981' : '#6c757d'}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
-                                ${roleDisplay}
-                            </span>
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="p-3">${user.full_name || 'N/A'}</td>
+                        <td class="p-3">${user.username || 'N/A'}</td>
+                        <td class="p-3">${user.email || 'N/A'}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-1 rounded text-xs font-semibold text-white" style="background: ${roleColor};">${roleDisplay}</span>
                         </td>
-                        <td style="padding: 12px;">${user.grade_level || 'N/A'}</td>
-                        <td style="padding: 12px;">${user.section || 'N/A'}</td>
-                        <td style="padding: 12px;">${user.lrn || 'N/A'}</td>
-                        <td style="padding: 12px;">${created}</td>
+                        <td class="p-3">${user.grade_level || 'N/A'}</td>
+                        <td class="p-3">${user.section || 'N/A'}</td>
+                        <td class="p-3">${user.lrn || 'N/A'}</td>
+                        <td class="p-3">${created}</td>
                     </tr>
                 `;
             });
@@ -2743,7 +1567,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const enrollmentList = document.getElementById('enrollmentList');
             
             if (enrollments.length === 0) {
-                enrollmentList.innerHTML = '<div style="text-align: center; color: #999; padding: 40px 20px;">No enrollment requests yet.</div>';
+                enrollmentList.innerHTML = '<div class="text-center text-gray-400 py-10">No enrollment requests yet.</div>';
                 return;
             }
             
@@ -2754,30 +1578,30 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                 const phone = enrollment.phone.startsWith('+63') ? enrollment.phone : '+63' + enrollment.phone;
                 
                 html += `
-                    <div class="event-item" style="position: relative;">
-                        <button class="enrollment-delete-btn" onclick="deleteEnrollment(${enrollment.id}, '${enrollment.full_name}');" style="position: absolute; top: 12px; right: 12px; background: transparent; color: #333; border: none; width: 24px; height: 24px; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0;">×</button>
+                    <div class="event-item bg-gray-50 p-5 hover:bg-gray-100 transition relative">
+                        <button class="enrollment-delete-btn absolute top-3 right-3 bg-transparent text-gray-700 border-none w-6 h-6 cursor-pointer text-2xl flex items-center justify-center leading-none p-0 hover:bg-gray-200 rounded" onclick="deleteEnrollment(${enrollment.id}, '${enrollment.full_name}');">×</button>
                         <div class="event-details">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                            <div class="flex flex-col md:flex-row justify-between items-start mb-3">
                                 <div>
-                                    <h4 style="margin: 0 0 5px 0;">${enrollment.full_name}</h4>
-                                    <p style="margin: 3px 0; color: #666; font-size: 14px;">${enrollment.email}</p>
-                                    <p style="margin: 3px 0; color: #666; font-size: 14px;">Phone: ${phone}</p>
+                                    <h4 class="text-lg font-semibold text-[#0a2d63] mb-1">${enrollment.full_name}</h4>
+                                    <p class="text-gray-600 text-sm">${enrollment.email}</p>
+                                    <p class="text-gray-600 text-sm">Phone: ${phone}</p>
                                 </div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <p style="margin: 0; font-size: 14px; color: #555;">Age: ${enrollment.age} | Gender: ${enrollment.gender} | Birthdate: ${enrollment.birthdate}</p>
-                                <span style="background: #e9ecef; padding: 10px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; color: #0a2d63; white-space: nowrap;">${statusText}</span>
+                            <div class="flex flex-col md:flex-row justify-between items-center mb-3">
+                                <p class="text-sm text-gray-600">Age: ${enrollment.age} | Gender: ${enrollment.gender} | Birthdate: ${enrollment.birthdate}</p>
+                                <span class="bg-gray-200 text-[#0a2d63] px-4 py-2 rounded text-sm font-semibold whitespace-nowrap">${statusText}</span>
                             </div>
-                            <p style="margin: 8px 0; font-size: 12px; color: #999;">Submitted: ${created}</p>
-                            <p style="margin: 8px 0; font-size: 13px;">
-                                <a href="#" onclick="viewDocuments(${enrollment.id}); return false;" style="color: #2563eb; text-decoration: none; cursor: pointer;">View Documents (${enrollment.document_count})</a>
+                            <p class="text-xs text-gray-400 mb-2">Submitted: ${created}</p>
+                            <p class="text-sm mb-2">
+                                <a href="#" onclick="viewDocuments(${enrollment.id}); return false;" class="text-blue-600 hover:underline cursor-pointer">View Documents (${enrollment.document_count})</a>
                                 &nbsp;|&nbsp;
-                                <a href="#" onclick="generatePDF(${enrollment.id}); return false;" style="color: #059669; text-decoration: none; cursor: pointer;">Generate PDF</a>
+                                <a href="#" onclick="generatePDF(${enrollment.id}); return false;" class="text-green-600 hover:underline cursor-pointer">Generate PDF</a>
                             </p>
-                            <div style="display: flex; gap: 8px; margin-top: 12px;">
-                                <button class="status-btn" onclick="updateStatus(${enrollment.id}, 'approved')" style="background: #10b981; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Accept</button>
-                                <button class="status-btn" onclick="updateStatus(${enrollment.id}, 'needs_docs')" style="background: #f59e0b; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Request Docs</button>
-                                <button class="status-btn" onclick="updateStatus(${enrollment.id}, 'rejected')" style="background: #ef4444; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Reject</button>
+                            <div class="flex gap-2 mt-3">
+                                <button class="status-btn bg-green-500 text-white px-3 py-1 rounded text-sm font-medium hover:bg-green-600 transition" onclick="acceptEnrollment(${enrollment.id})">Accept</button>
+                                <button class="status-btn bg-yellow-500 text-white px-3 py-1 rounded text-sm font-medium hover:bg-yellow-600 transition" onclick="updateStatus(${enrollment.id}, 'needs_docs')">Request Docs</button>
+                                <button class="status-btn bg-red-500 text-white px-3 py-1 rounded text-sm font-medium hover:bg-red-600 transition" onclick="updateStatus(${enrollment.id}, 'rejected')">Reject</button>
                             </div>
                         </div>
                     </div>
@@ -2808,19 +1632,19 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             let buttonsHtml = '';
             
             // Previous button
-            buttonsHtml += `<button class="pagination-btn" onclick="loadEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
+            buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="loadEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
             
             // Page numbers
             for (let i = 1; i <= totalPages; i++) {
                 if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
-                    buttonsHtml += `<button class="pagination-btn ${i === page ? 'active' : ''}" onclick="loadEnrollments(${i})">${i}</button>`;
+                    buttonsHtml += `<button class="pagination-btn border border-gray-300 px-3 py-1 rounded text-sm ${i === page ? 'bg-[#0a2d63] text-white border-[#0a2d63]' : 'bg-white hover:bg-gray-100'}" onclick="loadEnrollments(${i})">${i}</button>`;
                 } else if (i === page - 3 || i === page + 3) {
-                    buttonsHtml += `<button class="pagination-btn" disabled>...</button>`;
+                    buttonsHtml += `<button class="pagination-btn border border-gray-300 px-3 py-1 rounded text-sm bg-white" disabled>...</button>`;
                 }
             }
             
             // Next button
-            buttonsHtml += `<button class="pagination-btn" onclick="loadEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
+            buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="loadEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
             
             paginationButtons.innerHTML = buttonsHtml;
         }
@@ -2850,116 +1674,208 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             }
         }
 
+        // Accept enrollment – fetch details and open modal
+        function acceptEnrollment(enrollmentId) {
+            fetch(`php/get_enrollment_details.php?id=${enrollmentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        openAddUserModalWithEnrollment(data.data);
+                    } else {
+                        alert('Error loading enrollment details: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to load enrollment details');
+                });
+        }
+
+        // Open Add User modal with pre-filled enrollment data
+        function openAddUserModalWithEnrollment(enrollee) {
+            closeAddUserModal(); // reset first
+
+            const modal = document.getElementById('addUserModal');
+            if (modal) modal.style.display = 'flex';
+
+            // Helper to safely set element value by ID
+            function setElementValue(id, value) {
+                const el = document.getElementById(id);
+                if (el) el.value = value || '';
+            }
+
+            // Helper to set field by name (for email, fullName)
+            function setFieldByName(name, value) {
+                const field = document.querySelector(`[name="${name}"]`);
+                if (field) field.value = value || '';
+            }
+
+            // Set role to student and disable selector
+            const roleSelect = document.getElementById('modalRoleSelect');
+            if (roleSelect) {
+                roleSelect.value = 'student';
+                roleSelect.disabled = true;
+            }
+
+            // Show student fields
+            toggleModalStudentFields();
+
+            // Fill grade level and update sections
+            setElementValue('modalGradeLevel', enrollee.grade_level);
+            updateModalSections(); // populate sections based on grade
+
+            // Small delay to ensure sections are populated, then set section
+            setTimeout(() => {
+                setElementValue('modalSectionSelect', enrollee.section);
+            }, 50);
+
+            setElementValue('modalLrnField', enrollee.lrn);
+            setElementValue('modalAge', enrollee.age);
+            setElementValue('modalGender', enrollee.gender);
+            setElementValue('modalBirthdate', enrollee.birthdate);
+
+            // Phone: remove +63 prefix if present
+            let phoneValue = enrollee.phone || '';
+            if (phoneValue.startsWith('+63')) phoneValue = phoneValue.substring(3);
+            setElementValue('modalPhone', phoneValue);
+
+            // Strand (if any)
+            if (enrollee.strand) {
+                setElementValue('modalStrand', enrollee.strand);
+                // Show strand container if grade is 11/12 (already handled by updateModalSections, but ensure it's visible)
+                const strandContainer = document.getElementById('modalStrandContainer');
+                if (strandContainer && (enrollee.grade_level === 'Grade 11' || enrollee.grade_level === 'Grade 12')) {
+                    strandContainer.classList.remove('hidden');
+                }
+            }
+
+            // Email and full name
+            setFieldByName('email', enrollee.email);
+            setFieldByName('fullName', enrollee.full_name);
+
+            // Set default password
+            const passwordField = document.querySelector('input[name="password"]');
+            if (passwordField) passwordField.value = 'baa123';
+
+            // Clear username field for admin to enter
+            const usernameField = document.querySelector('input[name="username"]');
+            if (usernameField) usernameField.value = '';
+
+            // Store enrollment ID in hidden field
+            const enrollmentIdField = document.getElementById('modalEnrollmentId');
+            if (enrollmentIdField) enrollmentIdField.value = enrollee.id;
+        }
+
         // View documents function
         function viewDocuments(enrollmentId) {
             if (!enrollmentId) {
                 alert('Invalid enrollment ID');
                 return;
-        }
+            }
     
-                document.getElementById('documentModal').style.display = 'flex';
-                const documentList = document.getElementById('documentList');
-                documentList.innerHTML = '<div class="loading">Loading documents...</div>';
+            document.getElementById('documentModal').style.display = 'flex';
+            const documentList = document.getElementById('documentList');
+            documentList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading documents...</div>';
     
             fetch(`php/get_enrollment_documents.php?enrollment_id=${enrollmentId}`)
             .then(response => response.json())
             .then(data => {
-            console.log('Documents data received:', data); // Debug log
+                console.log('Documents data received:', data); // Debug log
             
-            if (data.success) {
-                // Check if documents array exists and has items
-                if (data.documents && Array.isArray(data.documents) && data.documents.length > 0) {
-                    let html = '<div class="document-grid">';
-                    
-                    data.documents.forEach(doc => {
-                        // Get filename - check different possible field names
-                        let fileName = doc.document_filename || doc.file_name || 'Document';
-                        let fileExt = '';
+                if (data.success) {
+                    // Check if documents array exists and has items
+                    if (data.documents && Array.isArray(data.documents) && data.documents.length > 0) {
+                        let html = '<div class="document-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">';
                         
-                        // Safely split filename
-                        if (fileName && typeof fileName === 'string' && fileName.includes('.')) {
-                            fileExt = fileName.split('.').pop().toLowerCase();
-                        }
-                        
-                        // Determine icon based on file extension (text-based)
-                        let icon = '[FILE]'; // Default icon
-                        if (fileExt) {
-                            if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExt)) 
-                                icon = '[IMAGE]';
-                            else if (['pdf'].includes(fileExt)) 
-                                icon = '[PDF]';
-                            else if (['doc', 'docx'].includes(fileExt)) 
-                                icon = '[DOC]';
-                            else if (['xls', 'xlsx', 'csv'].includes(fileExt)) 
-                                icon = '[SPREADSHEET]';
-                            else if (['ppt', 'pptx'].includes(fileExt)) 
-                                icon = '[PRESENTATION]';
-                            else if (['txt', 'rtf'].includes(fileExt)) 
-                                icon = '[TEXT]';
-                            else if (['zip', 'rar', '7z'].includes(fileExt)) 
-                                icon = '[ARCHIVE]';
-                        }
-                        
-                        // Get document type or use filename as fallback
-                        let docType = doc.document_type || 'Document';
-                        
-                        // Get file path - handle different possible field names
-                        let filePath = doc.document_path || doc.file_path || doc.path || '';
-                        
-                        // Make sure the path is correct for viewing
-                        if (filePath && !filePath.startsWith('/') && !filePath.startsWith('http')) {
-                            // Ensure the path is relative to the root
-                            filePath = filePath;
-                        }
-                        
-                        // Format file size
-                        let fileSize = '';
-                        if (doc.file_size) {
-                            let size = parseInt(doc.file_size);
-                            if (size < 1024) {
-                                fileSize = size + ' B';
-                            } else if (size < 1024 * 1024) {
-                                fileSize = (size / 1024).toFixed(1) + ' KB';
-                            } else {
-                                fileSize = (size / (1024 * 1024)).toFixed(1) + ' MB';
+                        data.documents.forEach(doc => {
+                            // Get filename - check different possible field names
+                            let fileName = doc.document_filename || doc.file_name || 'Document';
+                            let fileExt = '';
+                            
+                            // Safely split filename
+                            if (fileName && typeof fileName === 'string' && fileName.includes('.')) {
+                                fileExt = fileName.split('.').pop().toLowerCase();
                             }
-                        }
-                        
-                        // Format date
-                        let uploadDate = '';
-                        if (doc.created_at) {
-                            uploadDate = new Date(doc.created_at).toLocaleDateString();
-                        }
-                        
-                        html += `
-                            <div class="document-item">
-                                <div class="document-icon" style="font-size: 14px; font-weight: bold; color: #0a2d63;">${icon}</div>
-                                <div class="document-name">${docType}</div>
-                                <div class="document-type">${fileName}</div>
-                                ${fileSize ? `<div style="font-size: 11px; color: #999; margin-bottom: 10px;">${fileSize}</div>` : ''}
-                                ${uploadDate ? `<div style="font-size: 11px; color: #999; margin-bottom: 10px;">Uploaded: ${uploadDate}</div>` : ''}
-                                <div class="document-actions">
-                                    <a href="${filePath}" target="_blank" class="document-btn btn-view" onclick="if(!this.href) return false;">View</a>
-                                    <a href="${filePath}" download="${fileName}" class="document-btn btn-download" onclick="if(!this.href) return false;">Download</a>
+                            
+                            // Determine icon based on file extension (text-based)
+                            let icon = '[FILE]'; // Default icon
+                            if (fileExt) {
+                                if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExt)) 
+                                    icon = '[IMAGE]';
+                                else if (['pdf'].includes(fileExt)) 
+                                    icon = '[PDF]';
+                                else if (['doc', 'docx'].includes(fileExt)) 
+                                    icon = '[DOC]';
+                                else if (['xls', 'xlsx', 'csv'].includes(fileExt)) 
+                                    icon = '[SPREADSHEET]';
+                                else if (['ppt', 'pptx'].includes(fileExt)) 
+                                    icon = '[PRESENTATION]';
+                                else if (['txt', 'rtf'].includes(fileExt)) 
+                                    icon = '[TEXT]';
+                                else if (['zip', 'rar', '7z'].includes(fileExt)) 
+                                    icon = '[ARCHIVE]';
+                            }
+                            
+                            // Get document type or use filename as fallback
+                            let docType = doc.document_type || 'Document';
+                            
+                            // Get file path - handle different possible field names
+                            let filePath = doc.document_path || doc.file_path || doc.path || '';
+                            
+                            // Make sure the path is correct for viewing
+                            if (filePath && !filePath.startsWith('/') && !filePath.startsWith('http')) {
+                                // Ensure the path is relative to the root
+                                filePath = filePath;
+                            }
+                            
+                            // Format file size
+                            let fileSize = '';
+                            if (doc.file_size) {
+                                let size = parseInt(doc.file_size);
+                                if (size < 1024) {
+                                    fileSize = size + ' B';
+                                } else if (size < 1024 * 1024) {
+                                    fileSize = (size / 1024).toFixed(1) + ' KB';
+                                } else {
+                                    fileSize = (size / (1024 * 1024)).toFixed(1) + ' MB';
+                                }
+                            }
+                            
+                            // Format date
+                            let uploadDate = '';
+                            if (doc.created_at) {
+                                uploadDate = new Date(doc.created_at).toLocaleDateString();
+                            }
+                            
+                            html += `
+                                <div class="document-item bg-gray-50 border border-gray-200 rounded p-5 text-center hover:-translate-y-1 hover:shadow-md transition">
+                                    <div class="document-icon text-sm font-bold text-[#0a2d63] bg-gray-200 px-3 py-1 rounded inline-block mx-auto mb-4 font-mono">${icon}</div>
+                                    <div class="document-name font-semibold text-gray-800 mb-2 break-words">${docType}</div>
+                                    <div class="document-type text-xs text-gray-600 mb-2 bg-gray-100 px-2 py-1 rounded inline-block">${fileName}</div>
+                                    ${fileSize ? `<div class="text-xs text-gray-500 mb-2">${fileSize}</div>` : ''}
+                                    ${uploadDate ? `<div class="text-xs text-gray-500 mb-2">Uploaded: ${uploadDate}</div>` : ''}
+                                    <div class="document-actions flex gap-2 justify-center mt-2">
+                                        <a href="${filePath}" target="_blank" class="document-btn bg-[#0a2d63] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[#08306b] transition no-underline inline-block">View</a>
+                                        <a href="${filePath}" download="${fileName}" class="document-btn bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700 transition no-underline inline-block">Download</a>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
-                    });
-                    
-                    html += '</div>';
-                    documentList.innerHTML = html;
+                            `;
+                        });
+                        
+                        html += '</div>';
+                        documentList.innerHTML = html;
+                    } else {
+                        documentList.innerHTML = '<div class="text-center text-gray-500 py-10">No documents uploaded for this enrollment.</div>';
+                    }
                 } else {
-                    documentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No documents uploaded for this enrollment.</div>';
+                    documentList.innerHTML = '<div class="text-center text-gray-500 py-10">' + (data.message || 'Error loading documents.') + '</div>';
                 }
-            } else {
-                documentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">' + (data.message || 'Error loading documents.') + '</div>';
-            }
-        })
-        .catch(error => {
-            console.error('Error loading documents:', error);
-            documentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;">Error loading documents. Please try again.</div>';
-        });
-}
+            })
+            .catch(error => {
+                console.error('Error loading documents:', error);
+                documentList.innerHTML = '<div class="text-center text-red-600 py-10">Error loading documents. Please try again.</div>';
+            });
+        }
 
         function closeDocumentModal() {
             document.getElementById('documentModal').style.display = 'none';
@@ -3026,7 +1942,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const resultsDiv = document.getElementById('enrollmentSearchResults');
             
             if (enrollments.length === 0) {
-                resultsDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No enrollments found matching your criteria.</div>';
+                resultsDiv.innerHTML = '<div class="text-center text-gray-500 py-10">No enrollments found matching your criteria.</div>';
                 return;
             }
             
@@ -3039,16 +1955,16 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                 if (enrollment.status === 'rejected') statusColor = '#ef4444';
                 
                 html += `
-                    <div class="search-result-item" onclick="viewEnrollmentDetails(${enrollment.id})">
-                        <div class="user-name">${enrollment.full_name}</div>
-                        <div class="user-details">
+                    <div class="search-result-item p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50" onclick="viewEnrollmentDetails(${enrollment.id})">
+                        <div class="user-name font-semibold text-[#0a2d63] mb-1">${enrollment.full_name}</div>
+                        <div class="user-details text-xs text-gray-600 flex gap-2 flex-wrap">
                             <span>${enrollment.email}</span>
                             <span>•</span>
                             <span>${enrollment.phone}</span>
                             <span>•</span>
                             <span style="color: ${statusColor}; font-weight: 600;">${statusText}</span>
                         </div>
-                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        <div class="text-xs text-gray-500 mt-1">
                             Submitted: ${new Date(enrollment.created_at).toLocaleDateString()}
                         </div>
                     </div>
@@ -3079,19 +1995,19 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             let buttonsHtml = '';
             
             // Previous button
-            buttonsHtml += `<button class="pagination-btn" onclick="filterEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
+            buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="filterEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
             
             // Page numbers
             for (let i = 1; i <= totalPages; i++) {
                 if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
-                    buttonsHtml += `<button class="pagination-btn ${i === page ? 'active' : ''}" onclick="filterEnrollments(${i})">${i}</button>`;
+                    buttonsHtml += `<button class="pagination-btn border border-gray-300 px-3 py-1 rounded text-sm ${i === page ? 'bg-[#0a2d63] text-white border-[#0a2d63]' : 'bg-white hover:bg-gray-100'}" onclick="filterEnrollments(${i})">${i}</button>`;
                 } else if (i === page - 3 || i === page + 3) {
-                    buttonsHtml += `<button class="pagination-btn" disabled>...</button>`;
+                    buttonsHtml += `<button class="pagination-btn border border-gray-300 px-3 py-1 rounded text-sm bg-white" disabled>...</button>`;
                 }
             }
             
             // Next button
-            buttonsHtml += `<button class="pagination-btn" onclick="filterEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
+            buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="filterEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
             
             paginationButtons.innerHTML = buttonsHtml;
         }
@@ -3231,31 +2147,31 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const addPayableBtn = document.getElementById('addPayableBtn');
             
             resultContent.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                     <div>
-                        <strong>Total Tuition Fee:</strong>
-                        <div style="font-size: 18px; color: #0a2d63;">₱${tuitionFee.toFixed(2)}</div>
+                        <strong class="text-gray-700">Total Tuition Fee:</strong>
+                        <div class="text-lg text-[#0a2d63]">₱${tuitionFee.toFixed(2)}</div>
                     </div>
                     <div>
-                        <strong>Discounts/Grants:</strong>
-                        <div style="font-size: 18px; color: #10b981;">₱${discounts.toFixed(2)}</div>
+                        <strong class="text-gray-700">Discounts/Grants:</strong>
+                        <div class="text-lg text-green-600">₱${discounts.toFixed(2)}</div>
                     </div>
                     <div>
-                        <strong>Total Payable:</strong>
-                        <div style="font-size: 18px; color: #0a2d63;">₱${totalPayable.toFixed(2)}</div>
+                        <strong class="text-gray-700">Total Payable:</strong>
+                        <div class="text-lg text-[#0a2d63]">₱${totalPayable.toFixed(2)}</div>
                     </div>
                     <div>
-                        <strong>Down Payment:</strong>
-                        <div style="font-size: 18px; color: #f59e0b;">₱${downPayment.toFixed(2)}</div>
+                        <strong class="text-gray-700">Down Payment:</strong>
+                        <div class="text-lg text-yellow-600">₱${downPayment.toFixed(2)}</div>
                     </div>
                 </div>
-                <div style="text-align: center; padding: 15px; background: #f0f7ff; border-radius: 8px; margin: 15px 0;">
-                    <strong style="display: block; margin-bottom: 5px; color: #0a2d63;">Remaining Balance:</strong>
-                    <div style="font-size: 24px; font-weight: 700; color: #0a2d63;">₱${remainingBalance.toFixed(2)}</div>
+                <div class="text-center p-4 bg-blue-50 rounded-lg my-4">
+                    <strong class="block mb-1 text-[#0a2d63]">Remaining Balance:</strong>
+                    <div class="text-2xl font-bold text-[#0a2d63]">₱${remainingBalance.toFixed(2)}</div>
                 </div>
-                <div style="text-align: center; padding: 15px; background: #f0fff4; border-radius: 8px;">
-                    <strong style="display: block; margin-bottom: 5px; color: #10b981;">Monthly Payment (${monthlyPayments} months):</strong>
-                    <div style="font-size: 20px; font-weight: 700; color: #10b981;">₱${monthlyPaymentAmount.toFixed(2)}</div>
+                <div class="text-center p-4 bg-green-50 rounded-lg">
+                    <strong class="block mb-1 text-green-600">Monthly Payment (${monthlyPayments} months):</strong>
+                    <div class="text-xl font-bold text-green-600">₱${monthlyPaymentAmount.toFixed(2)}</div>
                 </div>
             `;
             
@@ -3335,7 +2251,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             }
             
             const payablesList = document.getElementById('payablesList');
-            payablesList.innerHTML = '<div class="loading">Loading payables...</div>';
+            payablesList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading payables...</div>';
             document.getElementById('studentPayables').style.display = 'block';
             
             fetch('php/get_student_payables.php?student_id=' + studentId)
@@ -3344,12 +2260,12 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                     if (data.success && data.payables) {
                         displayStudentPayables(data.payables);
                     } else {
-                        payablesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No payables found for this student.</div>';
+                        payablesList.innerHTML = '<div class="text-center text-gray-500 py-10">No payables found for this student.</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading student payables:', error);
-                    payablesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;">Error loading payables</div>';
+                    payablesList.innerHTML = '<div class="text-center text-red-600 py-10">Error loading payables</div>';
                 });
         }
         
@@ -3357,37 +2273,37 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const payablesList = document.getElementById('payablesList');
             
             if (payables.length === 0) {
-                payablesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No payables found for this student.</div>';
+                payablesList.innerHTML = '<div class="text-center text-gray-500 py-10">No payables found for this student.</div>';
                 return;
             }
             
-            let html = '<div class="payables-grid">';
-            html += '<div class="payables-header">Description</div>';
-            html += '<div class="payables-header">Amount</div>';
-            html += '<div class="payables-header">Due Date</div>';
-            html += '<div class="payables-header">Status</div>';
+            let html = '<div class="payables-grid grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">';
+            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Description</div>';
+            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Amount</div>';
+            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Due Date</div>';
+            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Status</div>';
             
             payables.forEach(payable => {
                 const dueDate = new Date(payable.due_date);
                 const today = new Date();
                 const isOverdue = dueDate < today && payable.status !== 'paid';
-                let statusClass = 'status-pending';
+                let statusClass = 'bg-yellow-100 text-yellow-800';
                 let statusText = 'Pending';
                 
                 if (payable.status === 'paid') {
-                    statusClass = 'status-paid';
+                    statusClass = 'bg-green-100 text-green-800';
                     statusText = 'Paid';
                 } else if (isOverdue) {
-                    statusClass = 'status-overdue';
+                    statusClass = 'bg-red-100 text-red-800';
                     statusText = 'Overdue';
                 }
                 
                 html += `
-                    <div class="payables-row">
-                        <div>${payable.item_name}</div>
-                        <div>₱${parseFloat(payable.amount).toFixed(2)}</div>
-                        <div>${dueDate.toLocaleDateString()}</div>
-                        <div><span class="status-badge ${statusClass}">${statusText}</span></div>
+                    <div class="payables-row contents">
+                        <div class="py-3 border-b border-gray-200" data-label="Description">${payable.item_name}</div>
+                        <div class="py-3 border-b border-gray-200" data-label="Amount">₱${parseFloat(payable.amount).toFixed(2)}</div>
+                        <div class="py-3 border-b border-gray-200" data-label="Due Date">${dueDate.toLocaleDateString()}</div>
+                        <div class="py-3 border-b border-gray-200" data-label="Status"><span class="px-3 py-1 rounded text-xs font-semibold ${statusClass}">${statusText}</span></div>
                     </div>
                 `;
             });
@@ -3466,6 +2382,13 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                 gradeLevel.value = '';
                 sectionSelect.innerHTML = '<option value="">Select Section</option>';
                 lrnField.value = '';
+                // Also clear new fields
+                document.getElementById('modalAge').value = '';
+                document.getElementById('modalGender').value = '';
+                document.getElementById('modalBirthdate').value = '';
+                document.getElementById('modalPhone').value = '';
+                document.getElementById('modalStrandContainer').classList.add('hidden');
+                document.getElementById('modalStrand').value = '';
             }
         }
 
@@ -3473,6 +2396,8 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         function updateModalSections() {
             const gradeLevel = document.getElementById('modalGradeLevel').value;
             const sectionSelect = document.getElementById('modalSectionSelect');
+            const strandContainer = document.getElementById('modalStrandContainer');
+            const strandSelect = document.getElementById('modalStrand');
             
             // Define grade-section mapping
             const gradeSections = {
@@ -3495,6 +2420,16 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                     option.textContent = section;
                     sectionSelect.appendChild(option);
                 });
+            }
+
+            // Strand visibility for Grade 11 & 12
+            if (gradeLevel === 'Grade 11' || gradeLevel === 'Grade 12') {
+                strandContainer.classList.remove('hidden');
+                strandSelect.setAttribute('required', 'required');
+            } else {
+                strandContainer.classList.add('hidden');
+                strandSelect.removeAttribute('required');
+                strandSelect.value = '';
             }
         }
 
@@ -3544,6 +2479,11 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             document.getElementById('addUserModal').style.display = 'none';
             document.getElementById('createUserForm').reset();
             document.getElementById('modalStudentFields').style.display = 'none';
+            document.getElementById('modalRoleSelect').disabled = false;
+
+            // Safely clear hidden enrollment ID
+            const enrollmentIdField = document.getElementById('modalEnrollmentId');
+            if (enrollmentIdField) enrollmentIdField.value = '';
         }
 
         function openSearchModal() {
@@ -3581,15 +2521,20 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         function submitAddUser() {
             const form = document.getElementById('createUserForm');
             const formData = new FormData(form);
-            
-            // If role is not student, remove student-specific fields
-            const role = document.getElementById('modalRoleSelect').value;
-            if (role !== 'student') {
-                formData.delete('gradeLevel');
-                formData.delete('section');
-                formData.delete('lrn');
+
+            // Basic validation (optional – the backend will also validate)
+            const username = formData.get('username')?.trim();
+            if (!username) {
+                alert('Username is required');
+                return;
             }
-            
+
+            // Show loading state
+            const submitBtn = document.querySelector('#addUserModal .bg-\\[\\#0a2d63\\]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Creating...';
+            submitBtn.disabled = true;
+
             fetch('php/handle_user.php', {
                 method: 'POST',
                 body: formData
@@ -3598,15 +2543,49 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             .then(data => {
                 if (data.success) {
                     alert('User created successfully!');
+
+                    // If this creation came from accepting an enrollment, update that enrollment
+                    const enrollmentId = document.getElementById('modalEnrollmentId').value;
+                    if (enrollmentId) {
+                        // Send request to link enrollment to the new user and mark as approved
+                        fetch('php/update_enrollment_after_accept.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: `enrollment_id=${enrollmentId}&user_id=${data.user_id}`
+                        })
+                        .then(res => res.json())
+                        .then(updateRes => {
+                            if (updateRes.success) {
+                                // Refresh enrollment list in admin dashboard
+                                if (typeof loadEnrollments === 'function') {
+                                    loadEnrollments();
+                                }
+                            } else {
+                                console.error('Failed to update enrollment:', updateRes.message);
+                            }
+                        })
+                        .catch(err => console.error('Error updating enrollment:', err));
+                    }
+
+                    // Close modal and reset
                     closeAddUserModal();
-                    loadUsers(); // Refresh user list
+
+                    // Optionally refresh user list if on user management tab
+                    if (typeof loadUsers === 'function' && document.getElementById('usersCard')?.classList.contains('active')) {
+                        loadUsers();
+                    }
                 } else {
-                    alert('Error creating user: ' + data.message);
+                    alert('Error creating user: ' + (data.message || 'Unknown error'));
                 }
             })
             .catch(error => {
                 console.error('Error creating user:', error);
-                alert('Error creating user');
+                alert('Network error. Please try again.');
+            })
+            .finally(() => {
+                // Restore button state
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
             });
         }
 
@@ -3708,7 +2687,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const resultsDiv = document.getElementById('searchResults');
             
             if (users.length === 0) {
-                resultsDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No users found matching your criteria.</div>';
+                resultsDiv.innerHTML = '<div class="text-center text-gray-500 py-10">No users found matching your criteria.</div>';
                 return;
             }
             
@@ -3716,16 +2695,17 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             users.forEach(user => {
                 const roleClass = `role-badge-${user.role}`;
                 const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
+                let roleColor = user.role === 'admin' || user.role === 'super_admin' ? '#0a2d63' : (user.role === 'teacher' ? '#10b981' : '#6c757d');
                 
                 html += `
-                    <div class="search-result-item">
-                        <div class="user-name">${user.full_name || 'N/A'}</div>
-                        <div class="user-details">
+                    <div class="search-result-item p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50">
+                        <div class="user-name font-semibold text-[#0a2d63] mb-1">${user.full_name || 'N/A'}</div>
+                        <div class="user-details text-xs text-gray-600 flex gap-2 flex-wrap">
                             <span>${user.username || 'N/A'}</span>
                             <span>•</span>
                             <span>${user.email || 'N/A'}</span>
                             <span>•</span>
-                            <span class="user-role ${roleClass}">${roleDisplay}</span>
+                            <span class="px-2 py-0.5 rounded text-xs font-semibold text-white" style="background: ${roleColor};">${roleDisplay}</span>
                             ${user.grade_level ? `<span>•</span><span>${user.grade_level} - ${user.section || ''}</span>` : ''}
                         </div>
                     </div>
@@ -3740,7 +2720,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const deleteList = document.getElementById('deleteUserList');
             const searchTerm = document.getElementById('deleteSearchInput')?.value.toLowerCase() || '';
             
-            deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Loading users...</div>';
+            deleteList.innerHTML = '<div class="text-center text-gray-500 py-10">Loading users...</div>';
             
             fetch('php/get_users.php')
                 .then(response => response.json())
@@ -3761,12 +2741,12 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         
                         displayDeleteUserList(filteredUsers);
                     } else {
-                        deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Error loading users</div>';
+                        deleteList.innerHTML = '<div class="text-center text-gray-500 py-10">Error loading users</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading users for deletion:', error);
-                    deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;">Error loading users</div>';
+                    deleteList.innerHTML = '<div class="text-center text-red-600 py-10">Error loading users</div>';
                 });
         }
 
@@ -3774,7 +2754,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const deleteList = document.getElementById('deleteUserList');
             
             if (users.length === 0) {
-                deleteList.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No users found.</div>';
+                deleteList.innerHTML = '<div class="text-center text-gray-500 py-10">No users found.</div>';
                 document.getElementById('selectedCount').textContent = '0';
                 return;
             }
@@ -3783,12 +2763,12 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             users.forEach(user => {
                 const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
                 html += `
-                    <div class="user-delete-item">
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #0a2d63;">${user.full_name || 'N/A'}</div>
-                            <div style="font-size: 12px; color: #666;">${user.username || 'N/A'} • ${user.email || 'N/A'} • ${roleDisplay}</div>
+                    <div class="user-delete-item flex justify-between items-center p-4 border-b border-gray-200 last:border-0">
+                        <div class="flex-1">
+                            <div class="font-semibold text-[#0a2d63]">${user.full_name || 'N/A'}</div>
+                            <div class="text-xs text-gray-600">${user.username || 'N/A'} • ${user.email || 'N/A'} • ${roleDisplay}</div>
                         </div>
-                        <input type="checkbox" class="delete-checkbox" value="${user.id}" onchange="updateSelectedCount()">
+                        <input type="checkbox" class="delete-checkbox w-5 h-5 cursor-pointer" value="${user.id}" onchange="updateSelectedCount()">
                     </div>
                 `;
             });
@@ -3803,86 +2783,86 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         }
 
         function confirmDeleteUsers() {
-        const checkboxes = document.querySelectorAll('#deleteUserList .delete-checkbox:checked');
-        const selectedIds = Array.from(checkboxes).map(cb => cb.value);
-    
-        if (selectedIds.length === 0) {
-            alert('Please select at least one user to delete.');
-            return;
-        }
-    
-        if (!confirm(`Are you sure you want to delete ${selectedIds.length} user(s)? This action cannot be undone.`)) {
-            return;
-        }
-    
-        // Show loading state
-        const deleteBtn = document.querySelector('#deleteUserModal .btn-delete');
-        const originalText = deleteBtn.textContent;
+            const checkboxes = document.querySelectorAll('#deleteUserList .delete-checkbox:checked');
+            const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+        
+            if (selectedIds.length === 0) {
+                alert('Please select at least one user to delete.');
+                return;
+            }
+        
+            if (!confirm(`Are you sure you want to delete ${selectedIds.length} user(s)? This action cannot be undone.`)) {
+                return;
+            }
+        
+            // Show loading state
+            const deleteBtn = document.querySelector('#deleteUserModal .btn-delete');
+            const originalText = deleteBtn.textContent;
             deleteBtn.textContent = 'Deleting...';
             deleteBtn.disabled = true;
-    
-        // Delete users one by one
-        let deletedCount = 0;
-        let failedCount = 0;
-    
-        function deleteNextUser(index) {
-            if (index >= selectedIds.length) {
-            // All done
-            deleteBtn.textContent = originalText;
-            deleteBtn.disabled = false;
-            
-            if (deletedCount > 0) {
-                alert(`Successfully deleted ${deletedCount} user(s). ${failedCount > 0 ? failedCount + ' failed.' : ''}`);
-                closeDeleteUserModal();
-                loadUsers(); // Refresh user list
-                if (typeof loadDeleteUserList === 'function') {
-                    loadDeleteUserList(); // Refresh delete modal list
+        
+            // Delete users one by one
+            let deletedCount = 0;
+            let failedCount = 0;
+        
+            function deleteNextUser(index) {
+                if (index >= selectedIds.length) {
+                    // All done
+                    deleteBtn.textContent = originalText;
+                    deleteBtn.disabled = false;
+                    
+                    if (deletedCount > 0) {
+                        alert(`Successfully deleted ${deletedCount} user(s). ${failedCount > 0 ? failedCount + ' failed.' : ''}`);
+                        closeDeleteUserModal();
+                        loadUsers(); // Refresh user list
+                        if (typeof loadDeleteUserList === 'function') {
+                            loadDeleteUserList(); // Refresh delete modal list
+                        }
+                    } else {
+                        alert('No users were deleted.');
+                    }
+                    return;
                 }
-            } else {
-                alert('No users were deleted.');
-            }
-            return;
-        }
-        
-        const formData = new FormData();
-        formData.append('user_id', selectedIds[index]);
-        
-        fetch('php/delete_users.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.text(); // Get as text first to debug
-        })
-        .then(text => {
-            try {
-                const data = JSON.parse(text);
-                if (data.success) {
-                    deletedCount++;
-                } else {
-                    console.error('Delete failed:', data.message);
+                
+                const formData = new FormData();
+                formData.append('user_id', selectedIds[index]);
+                
+                fetch('php/delete_users.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.text(); // Get as text first to debug
+                })
+                .then(text => {
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.success) {
+                            deletedCount++;
+                        } else {
+                            console.error('Delete failed:', data.message);
+                            failedCount++;
+                        }
+                    } catch (e) {
+                        console.error('Invalid JSON response:', text);
+                        failedCount++;
+                    }
+                    // Delete next user
+                    deleteNextUser(index + 1);
+                })
+                .catch(error => {
+                    console.error('Error deleting user:', error);
                     failedCount++;
-                }
-            } catch (e) {
-                console.error('Invalid JSON response:', text);
-                failedCount++;
+                    deleteNextUser(index + 1);
+                });
             }
-            // Delete next user
-            deleteNextUser(index + 1);
-        })
-        .catch(error => {
-            console.error('Error deleting user:', error);
-            failedCount++;
-            deleteNextUser(index + 1);
-        });
-    }
-    
-    // Start deleting from first user
-    deleteNextUser(0);
-}
+            
+            // Start deleting from first user
+            deleteNextUser(0);
+        }
 
         // Other admin helper functions
         function updateStatus(enrollmentId, status) {
@@ -3935,10 +2915,6 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                 });
             }
         }
-
-        // Update clock immediately and every second
-        updateLiveClock();
-        setInterval(updateLiveClock, 1000);
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
