@@ -56,7 +56,6 @@ if ($userRole == 'student' && !empty($gradeLevel) && !empty($section)) {
             SELECT 
                 subject_code,
                 subject_name,
-                description,
                 grade_level,
                 section,
                 day_of_week,
@@ -84,7 +83,6 @@ if ($userRole == 'student' && !empty($gradeLevel) && !empty($section)) {
                 $allSubjects[$subjectName] = [
                     'subject_code' => $subject['subject_code'],
                     'subject_name' => $subject['subject_name'],
-                    'description' => $subject['description'],
                     'grade_level' => $subject['grade_level'],
                     'section' => $subject['section'],
                     'semester' => $subject['semester'],
@@ -150,31 +148,27 @@ try {
 // ADMIN STATS 
 if (in_array($userRole, ['admin', 'super_admin'])) {
     try {
-    // Grades 7-10
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role = 'student' AND grade_level IN ('Grade 7','Grade 8','Grade 9','Grade 10')");
-    $stmt->execute();
-    $grades7to10 = $stmt->fetchColumn();
+        // New Requests (pending enrollments)
+        $stmt = $pdo->query("SELECT COUNT(*) FROM enrollments WHERE status = 'pending'");
+        $newRequests = $stmt->fetchColumn();
 
-    // Grades 11-12
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role = 'student' AND grade_level IN ('Grade 11','Grade 12')");
-    $stmt->execute();
-    $grades11to12 = $stmt->fetchColumn();
+        // Actual students in Grades 7-10
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role = 'student' AND grade_level IN ('Grade 7','Grade 8','Grade 9','Grade 10')");
+        $stmt->execute();
+        $grades7to10 = $stmt->fetchColumn();
 
-    // New Requests (still from enrollments, pending)
-    $stmt = $pdo->query("SELECT COUNT(*) FROM enrollments WHERE status = 'pending'");
-    $newRequests = $stmt->fetchColumn();
-} catch (PDOException $e) {
-    error_log("Error fetching stats: " . $e->getMessage());
-    $newRequests = $grades7to10 = $grades11to12 = 0;
-}
-    // Total enrollments count
-try {
-    $stmt = $pdo->query("SELECT COUNT(*) FROM enrollments");
-    $totalEnrollments = $stmt->fetchColumn();
-} catch (PDOException $e) {
-    error_log("Error counting enrollments: " . $e->getMessage());
-    $totalEnrollments = 0;
-}
+        // Actual students in Grades 11-12
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role = 'student' AND grade_level IN ('Grade 11','Grade 12')");
+        $stmt->execute();
+        $grades11to12 = $stmt->fetchColumn();
+
+        // Total enrollments count (for pagination)
+        $stmt = $pdo->query("SELECT COUNT(*) FROM enrollments");
+        $totalEnrollments = $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        error_log("Error fetching stats: " . $e->getMessage());
+        $newRequests = $grades7to10 = $grades11to12 = $totalEnrollments = 0;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -188,7 +182,6 @@ try {
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        /* Custom animations and overrides */
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -212,11 +205,9 @@ try {
             margin-left: 10px;
             vertical-align: middle;
         }
-        /* Ensure active card is visible */
         .dashboard-card.active {
             display: flex !important;
         }
-        /* Permanent sidebar */
         .sidebar {
             position: fixed;
             left: 0;
@@ -234,11 +225,9 @@ try {
             flex-direction: column;
             min-height: 100vh;
         }
-        /* No overlay needed */
         .sidebar-overlay {
             display: none;
         }
-        /* Stat cards */
         .stat-card {
             background: white;
             border-radius: 0.75rem;
@@ -258,7 +247,6 @@ try {
             color: #0a2d63;
             margin-top: 0.25rem;
         }
-        /* Chart container */
         .chart-container {
             background: white;
             border-radius: 0.75rem;
@@ -274,9 +262,21 @@ try {
             background: white;
             font-size: 0.875rem;
         }
+        .search-icon-outline {
+            border: 2px solid #0a2d63;
+            border-radius: 0.375rem;
+            padding: 0.25rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+        }
+        .search-icon-outline img {
+            width: 24px;
+            height: 24px;
+        }
     </style>
     <script>
-        // Fee structure per grade (Total Assessment)
         const gradeFees = {
             'Grade 7': 36102.50,
             'Grade 8': 36723.23,
@@ -288,9 +288,8 @@ try {
     </script>
 </head>
 <body class="bg-gray-100 font-sans <?php echo in_array($userRole, ['admin', 'super_admin']) ? 'admin-mode' : ''; ?>">
-    <!-- Dashboard Page -->
     <div class="dashboard-page relative min-h-screen" id="dashboardPage">
-        <!-- Permanent Sidebar (no toggle) -->
+        <!-- Permanent Sidebar -->
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header p-8 text-center bg-white bg-opacity-10 border-b border-white border-opacity-10">
                 <img src="images/logo.png" alt="BAA Logo" class="sidebar-logo w-[110px] h-[110px] mx-auto mb-5 object-contain">
@@ -320,23 +319,15 @@ try {
         
         <!-- Main Content -->
         <div class="dashboard-main flex flex-col min-h-screen">
-            <!-- Dashboard Header (fixed) - removed menu button -->
+            <!-- Dashboard Header -->
             <div class="dashboard-header bg-[#0a2d63] text-white px-4 md:px-10 py-4 shadow-md w-full">
                 <div class="header-content flex items-center justify-between max-w-7xl mx-auto">
-                    <!-- Left section (empty now) -->
                     <div class="header-left flex items-center flex-1"></div>
-
-                    <!-- Center section (perfectly centered) -->
                     <div class="header-center text-center flex-1">
                         <h2 class="text-2xl md:text-3xl font-semibold mb-1">Welcome to Your Dashboard</h2>
                         <p class="text-sm md:text-base opacity-90 whitespace-nowrap">Stay updated with your academic progress and school activities</p>
                     </div>
-
-                    <!-- Right section (search + user) -->
                     <div class="header-right flex items-center justify-end gap-4 flex-1">
-                        <button onclick="openSearchModal()" class="bg-transparent border-none cursor-pointer flex items-center">
-                            <img src="images/search_icon.png" alt="Search" class="w-6 h-6">
-                        </button>
                         <div class="user-info-container flex items-center gap-4">
                             <span class="user-name font-bold text-xl md:text-2xl text-white"><?php echo htmlspecialchars($fullName); ?></span>
                             <button class="logout-btn bg-white text-[#0a2d63] px-5 py-2 rounded-full font-semibold hover:bg-gray-100 hover:-translate-y-0.5 transition" onclick="window.location.href='php/logout.php'">Logout</button>
@@ -345,14 +336,13 @@ try {
                 </div>
             </div>
 
-            <!-- Dashboard Content - Centered Container -->
+            <!-- Dashboard Content -->
             <div class="dashboard-content flex justify-center items-start w-full p-5 min-h-[calc(100vh-120px)]">
                 <div class="centered-container w-full max-w-[1200px] mx-auto">
                     <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
                         <!-- Admin Enrollments Dashboard -->
                         <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden <?php echo ($userRole == 'admin' || $userRole == 'super_admin') ? 'active' : ''; ?>" id="adminEnrollmentCard">
                             <div class="card-content p-8 space-y-6 w-full">
-                                <!-- Stats Cards -->
                                 <div class="stats-grid grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div class="stat-card">
                                         <h3>New Requests</h3>
@@ -370,30 +360,26 @@ try {
 
                                 <!-- Wave Graph with Filters -->
                                 <div class="chart-container">
-                                <div class="flex flex-wrap gap-4 mb-4">
-                                <!-- New: Data source selector -->
-                                    <select id="dataTypeFilter" class="filter-select" onchange="updateChart()">
-                                        <option value="enrollees">Enrollment Requests</option>
-                                        <option value="students">Registered Students</option>
-                                    </select>
-
-                                    <select id="chartGradeFilter" class="filter-select" onchange="updateChart()">
-                                        <option value="">All Grades</option>
-                                        <option value="Grade 7">Grade 7</option>
-                                        <option value="Grade 8">Grade 8</option>
-                                        <option value="Grade 9">Grade 9</option>
-                                        <option value="Grade 10">Grade 10</option>
-                                        <option value="Grade 11">Grade 11</option>
-                                        <option value="Grade 12">Grade 12</option>
-                                    </select>
-
-<select id="chartSectionFilter" class="filter-select" onchange="updateChart()">
-    <option value="">All Sections</option>
-            <!-- Sections will be populated dynamically based on grade (optional) -->
-        </select>
-    </div>
-    <canvas id="enrollmentChart" style="width:100%; max-height:300px;"></canvas>
-</div>
+                                    <div class="flex flex-wrap gap-4 mb-4">
+                                        <select id="dataTypeFilter" class="filter-select" onchange="updateChart()">
+                                            <option value="enrollees">Enrollment Requests</option>
+                                            <option value="students">Registered Students</option>
+                                        </select>
+                                        <select id="chartGradeFilter" class="filter-select" onchange="updateChart()">
+                                            <option value="">All Grades</option>
+                                            <option value="Grade 7">Grade 7</option>
+                                            <option value="Grade 8">Grade 8</option>
+                                            <option value="Grade 9">Grade 9</option>
+                                            <option value="Grade 10">Grade 10</option>
+                                            <option value="Grade 11">Grade 11</option>
+                                            <option value="Grade 12">Grade 12</option>
+                                        </select>
+                                        <select id="chartSectionFilter" class="filter-select" onchange="updateChart()">
+                                            <option value="">All Sections</option>
+                                        </select>
+                                    </div>
+                                    <canvas id="enrollmentChart" style="width:100%; max-height:300px;"></canvas>
+                                </div>
 
                                 <div class="enrollment-controls flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-gray-50 rounded">
                                     <div class="enrollment-stats flex flex-col md:flex-row items-center gap-4">
@@ -435,12 +421,16 @@ try {
                         <!-- User Management Card -->
                         <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="usersCard">
                             <div class="card-content p-8 space-y-6 w-full">
-                                <div>
-                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">User Management</h3>
-                                    <p class="text-gray-600">Manage user accounts - add and delete users</p>
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">User Management</h3>
+                                        <p class="text-gray-600">Manage user accounts - add and delete users</p>
+                                    </div>
+                                    <button onclick="openSearchModal()" class="search-icon-outline bg-white border-2 border-[#0a2d63] rounded p-2 hover:bg-gray-100 transition">
+                                        <img src="images/search_icon.png" alt="Search" class="w-6 h-6">
+                                    </button>
                                 </div>
 
-                                <!-- User Management Actions -->
                                 <div class="flex gap-8 justify-center">
                                     <button onclick="openAddUserModal()" class="bg-green-600 text-white px-6 py-3 rounded font-medium hover:bg-green-700 transition flex items-center gap-2">
                                         Add User
@@ -450,8 +440,7 @@ try {
                                     </button>
                                 </div>
 
-                                <!-- User List Container -->
-                                <div id="userList" class="mt-5"></div>
+                                <!-- No user list table displayed -->
                             </div>
                         </div>
 
@@ -498,15 +487,14 @@ try {
                                 <div id="calculationResult" class="hidden p-5 bg-gray-50 border border-gray-200 rounded space-y-4">
                                     <h4 class="text-lg font-semibold text-[#0a2d63]">Calculation Result</h4>
                                     <div id="resultContent"></div>
-                                    <div class="text-center">
-                                        <button onclick="generateAssessmentPDF()" id="generatePdfBtn" class="hidden bg-blue-600 text-white px-5 py-2 rounded font-medium hover:bg-blue-700 transition">
+                                    <div class="flex gap-4 justify-center">
+                                        <button onclick="generateAssessmentPDF()" id="generatePdfBtn" class="hidden bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition">
                                             Generate Assessment PDF
                                         </button>
+                                        <button onclick="addPayable()" id="addPayableBtn" class="hidden bg-green-600 text-white px-5 py-2 rounded font-medium hover:bg-green-700 transition">
+                                            Add to Student Payables
+                                        </button>
                                     </div>
-                                </div>
-
-                                <div class="text-center">
-                                    <button onclick="addPayable()" id="addPayableBtn" class="hidden bg-green-600 text-white px-5 py-2 rounded font-medium hover:bg-green-700 transition">Add to Student Payables</button>
                                 </div>
                             </div>
                         </div>
@@ -519,7 +507,6 @@ try {
                                     <p class="text-gray-600">Process student payments and update payable status</p>
                                 </div>
 
-                                <!-- Payment Processing Form -->
                                 <div class="p-6 bg-gray-50 rounded space-y-4">
                                     <h4 class="text-lg font-semibold text-[#0a2d63]">Process Payment</h4>
                                     <form id="paymentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -541,7 +528,7 @@ try {
                                         </div>
                                         
                                         <div class="form-actions md:col-span-2 text-center">
-                                            <button type="button" onclick="loadStudentPayables()" class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition mr-2">
+                                            <button type="button" onclick="loadStudentPayables()" class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition mr-2">
                                                 Load Student Payables
                                             </button>
                                             <button type="button" onclick="processPayment()" class="bg-green-600 text-white px-5 py-2 rounded font-medium hover:bg-green-700 transition">
@@ -556,9 +543,7 @@ try {
                                     <div id="payablesList" class="loading">Loading payables...</div>
                                 </div>
 
-                                <div id="paymentResult" class="hidden p-6 bg-green-100 border border-green-300 rounded text-green-700">
-                                    <!-- Payment result will be inserted here -->
-                                </div>
+                                <div id="paymentResult" class="hidden p-6 bg-green-100 border border-green-300 rounded text-green-700"></div>
                             </div>
                         </div>
 
@@ -663,8 +648,6 @@ try {
                                                 <label class="block mb-2 font-medium text-gray-700">LRN *</label>
                                                 <input type="text" name="lrn" id="modalLrnField" class="w-full p-2 border border-gray-300 rounded">
                                             </div>
-
-                                            <!-- New enrollment fields -->
                                             <div class="form-group mb-4">
                                                 <label class="block mb-2 font-medium text-gray-700">Age *</label>
                                                 <input type="number" name="age" id="modalAge" min="1" max="120" class="w-full p-2 border border-gray-300 rounded" required>
@@ -685,9 +668,9 @@ try {
                                                 <label class="block mb-2 font-medium text-gray-700">Strand *</label>
                                                 <select name="strand" id="modalStrand" class="w-full p-2 border border-gray-300 rounded">
                                                     <option value="">Select Strand</option>
-                                                    <option value="STEM">STEM (Science, Technology, Engineering, and Mathematics)</option>
-                                                    <option value="ABM">ABM (Accountancy, Business, and Management)</option>
-                                                    <option value="HUMSS">HUMSS (Humanities and Social Sciences)</option>
+                                                    <option value="STEM">STEM</option>
+                                                    <option value="ABM">ABM</option>
+                                                    <option value="HUMSS">HUMSS</option>
                                                 </select>
                                             </div>
                                             <div class="form-group mb-4">
@@ -698,8 +681,6 @@ try {
                                                 </div>
                                                 <small class="text-gray-500">Enter 10 digits (without +63)</small>
                                             </div>
-
-                                            <!-- Hidden field to store enrollment ID when accepting -->
                                             <input type="hidden" id="modalEnrollmentId" value="">
                                         </div>
                                     </form>
@@ -719,13 +700,11 @@ try {
                                     <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeSearchModal()">×</button>
                                 </div>
                                 <div class="modal-body p-6">
-                                    <!-- Search Input -->
                                     <div class="form-group mb-4">
                                         <label class="block mb-2 font-medium text-gray-700">Search by name, email, or username</label>
                                         <input type="text" id="searchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded" onkeyup="performSearch()">
                                     </div>
 
-                                    <!-- Filters Section -->
                                     <div class="filter-section bg-gray-50 p-4 rounded mb-4">
                                         <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Filter by Role</h4>
                                         <div class="checkbox-group flex flex-wrap gap-4">
@@ -781,7 +760,6 @@ try {
                                         </div>
                                     </div>
 
-                                    <!-- Search Results -->
                                     <div id="searchResults" class="search-results max-h-72 overflow-y-auto border border-gray-200 rounded mt-4">
                                         <div class="text-center p-10 text-gray-500">Start typing to search for users</div>
                                     </div>
@@ -800,13 +778,11 @@ try {
                                     <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeEnrollmentSearchModal()">×</button>
                                 </div>
                                 <div class="modal-body p-6">
-                                    <!-- Search Input -->
                                     <div class="form-group mb-4">
                                         <label class="block mb-2 font-medium text-gray-700">Search by name, email, or phone</label>
                                         <input type="text" id="enrollmentSearchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded" onkeyup="filterEnrollments()">
                                     </div>
 
-                                    <!-- Status Filters -->
                                     <div class="filter-section bg-gray-50 p-4 rounded mb-4">
                                         <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Filter by Status</h4>
                                         <div class="checkbox-group flex flex-wrap gap-4">
@@ -829,7 +805,6 @@ try {
                                         </div>
                                     </div>
 
-                                    <!-- Results Per Page -->
                                     <div class="filter-section bg-gray-50 p-4 rounded mb-4">
                                         <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Results Per Page</h4>
                                         <div class="custom-per-page flex items-center gap-2 mt-2">
@@ -848,12 +823,10 @@ try {
                                         </div>
                                     </div>
 
-                                    <!-- Search Results -->
                                     <div id="enrollmentSearchResults" class="search-results max-h-96 overflow-y-auto border border-gray-200 rounded">
                                         <div class="text-center p-10 text-gray-500">Loading enrollments...</div>
                                     </div>
 
-                                    <!-- Pagination for Search Results -->
                                     <div id="enrollmentSearchPagination" class="pagination-controls hidden mt-4 p-4 bg-gray-50 rounded flex flex-col md:flex-row items-center gap-4">
                                         <div class="pagination-info text-sm text-gray-600" id="enrollmentSearchInfo"></div>
                                         <div class="pagination-buttons flex gap-1" id="enrollmentSearchButtons"></div>
@@ -892,18 +865,12 @@ try {
                                 </div>
                                 <div class="modal-body p-6">
                                     <p class="mb-5 text-gray-600">Select users to delete. This action cannot be undone.</p>
-                                    
-                                    <!-- Search within delete modal -->
                                     <div class="form-group mb-4">
                                         <input type="text" id="deleteSearchInput" placeholder="Search users..." class="w-full p-2 border border-gray-300 rounded" onkeyup="loadDeleteUserList()">
                                     </div>
-
-                                    <!-- User List for Deletion -->
                                     <div id="deleteUserList" class="max-h-72 overflow-y-auto border border-gray-200 rounded">
                                         <div class="text-center p-10 text-gray-500">Loading users...</div>
                                     </div>
-
-                                    <!-- Selected Count -->
                                     <div class="mt-4 text-sm text-gray-600">
                                         <span id="selectedCount">0</span> user(s) selected
                                     </div>
@@ -916,18 +883,24 @@ try {
                         </div>
 
                     <?php elseif ($userRole == 'student'): ?>
-                        <!-- Student Dashboard - All cards centered -->
-                        <!-- Home Card (Grades + Subjects) -->
+                        <!-- Student Home Card -->
                         <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden active" id="homeCard">
-                            <div class="card-content p-8 space-y-8">
-                                <div class="space-y-4">
-                                    <h3 class="text-2xl font-semibold text-[#0a2d63]">Grades</h3>
-                                    <p class="text-gray-600">Check your current grades, academic performance, and progress reports.</p>
-                                    
-                                    <div class="grade-summary overflow-x-auto" id="gradeSummary">
+                            <div class="card-content p-8 w-full">
+                                <div class="space-y-6">
+                                    <div>
+                                        <h3 class="text-2xl font-semibold text-[#0a2d63]">Student Performance Overview</h3>
+                                        <p class="text-gray-600">Check your current grades, academic performance, and progress reports.</p>
+                                    </div>
+
+                                    <!-- Chart Container (hidden if no grades) -->
+                                    <div class="chart-container w-full" style="height: 300px; <?php echo empty($grades) ? 'display: none;' : ''; ?>">
+                                        <canvas id="studentGradeChart" class="w-full h-full"></canvas>
+                                    </div>
+
+                                    <!-- Grades Table -->
+                                    <div class="grade-summary overflow-x-auto w-full">
                                         <?php if (!empty($grades)): ?>
                                             <?php
-                                            // Group grades by subject
                                             $groupedGrades = [];
                                             foreach ($grades as $grade) {
                                                 $subjectName = $grade['subject_name'];
@@ -945,7 +918,6 @@ try {
                                                 $groupedGrades[$subjectName]['total'] += $grade['grade'];
                                             }
                                             
-                                            // Calculate averages
                                             foreach ($groupedGrades as $subjectName => &$data) {
                                                 if ($data['count'] > 0) {
                                                     $data['average'] = round($data['total'] / $data['count']);
@@ -953,7 +925,7 @@ try {
                                             }
                                             ?>
                                             
-                                            <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden mt-4">
+                                            <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden">
                                                 <thead class="bg-[#0a2d63] text-white">
                                                     <tr>
                                                         <th class="p-4 text-left font-semibold">Subject</th>
@@ -983,9 +955,8 @@ try {
                                                     <?php endforeach; ?>
                                                 </tbody>
                                             </table>
-                                            
                                         <?php else: ?>
-                                            <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden mt-4">
+                                            <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden">
                                                 <thead class="bg-[#0a2d63] text-white">
                                                     <tr>
                                                         <th class="p-4 text-left font-semibold">Subject</th>
@@ -1006,7 +977,8 @@ try {
                                     </div>
                                 </div>
                                 
-                                <div class="space-y-4 border-t-2 border-gray-200 pt-8">
+                                <!-- Subjects for Today Section -->
+                                <div class="space-y-4 border-t-2 border-gray-200 pt-8 mt-8">
                                     <div class="subjects-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-gray-200">
                                         <div>
                                             <h3 class="text-2xl font-semibold text-[#0a2d63]">Subjects for Today</h3>
@@ -1021,9 +993,6 @@ try {
                                                 <div class="subject-item bg-gray-50 p-5 hover:bg-gray-100 transition">
                                                     <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subject['subject_name'] ?? ''); ?> <span class="today-badge bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded ml-2 align-middle">TODAY</span></h4>
                                                     <p class="text-gray-600"><strong>Schedule:</strong> <?php echo htmlspecialchars($subject['schedule'] ?? 'Schedule not set'); ?></p>
-                                                    <?php if (!empty($subject['description'])): ?>
-                                                        <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subject['description']); ?></p>
-                                                    <?php endif; ?>
                                                 </div>
                                             <?php endforeach; ?>
                                         <?php else: ?>
@@ -1042,7 +1011,6 @@ try {
                                                     <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subjectData['subject_name']); ?></h4>
                                                     <p class="text-gray-600"><strong>Code:</strong> <?php echo htmlspecialchars($subjectData['subject_code'] ?? ''); ?></p>
                                                     <p class="text-gray-600"><strong>Semester:</strong> <?php echo htmlspecialchars($subjectData['semester'] ?? ''); ?></p>
-                                                    
                                                     <div class="schedule-list mt-2 pl-4">
                                                         <p class="font-medium text-gray-700">All Schedules:</p>
                                                         <?php foreach ($subjectData['schedules'] as $schedule): ?>
@@ -1052,10 +1020,6 @@ try {
                                                             </div>
                                                         <?php endforeach; ?>
                                                     </div>
-                                                    
-                                                    <?php if (!empty($subjectData['description'])): ?>
-                                                        <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subjectData['description']); ?></p>
-                                                    <?php endif; ?>
                                                 </div>
                                             <?php endforeach; ?>
                                         <?php else: ?>
@@ -1081,7 +1045,6 @@ try {
                                 <div class="grade-summary overflow-x-auto">
                                     <?php if (!empty($grades)): ?>
                                         <?php
-                                        // Group grades by subject
                                         $groupedGrades = [];
                                         foreach ($grades as $grade) {
                                             $subjectName = $grade['subject_name'];
@@ -1099,7 +1062,6 @@ try {
                                             $groupedGrades[$subjectName]['total'] += $grade['grade'];
                                         }
                                         
-                                        // Calculate averages
                                         foreach ($groupedGrades as $subjectName => &$data) {
                                             if ($data['count'] > 0) {
                                                 $data['average'] = round($data['total'] / $data['count']);
@@ -1137,7 +1099,6 @@ try {
                                                 <?php endforeach; ?>
                                             </tbody>
                                         </table>
-                                        
                                     <?php else: ?>
                                         <table class="grades-table w-full border-collapse bg-white shadow-sm rounded overflow-hidden mt-4">
                                             <thead class="bg-[#0a2d63] text-white">
@@ -1172,16 +1133,12 @@ try {
                                 </div>
                                 <p class="text-gray-600">Your subjects scheduled for today.</p>
                                 
-                                <!-- Today's Subjects (shown by default) -->
                                 <div class="subject-list space-y-4" id="todaySubjectsCardList">
                                     <?php if (!empty($todaySubjects)): ?>
                                         <?php foreach ($todaySubjects as $subject): ?>
                                             <div class="subject-item bg-gray-50 p-5 hover:bg-gray-100 transition">
                                                 <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subject['subject_name'] ?? ''); ?> <span class="today-badge bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded ml-2 align-middle">TODAY</span></h4>
                                                 <p class="text-gray-600"><strong>Schedule:</strong> <?php echo htmlspecialchars($subject['schedule'] ?? 'Schedule not set'); ?></p>
-                                                <?php if (!empty($subject['description'])): ?>
-                                                    <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subject['description']); ?></p>
-                                                <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     <?php else: ?>
@@ -1193,7 +1150,6 @@ try {
                                     <?php endif; ?>
                                 </div>
                                 
-                                <!-- All Subjects (hidden by default) -->
                                 <div class="subject-list hidden space-y-4" id="allSubjectsCardList">
                                     <?php if (!empty($allSubjects)): ?>
                                         <?php foreach ($allSubjects as $subjectName => $subjectData): ?>
@@ -1201,7 +1157,6 @@ try {
                                                 <h4 class="text-lg font-semibold text-gray-800 mb-2"><?php echo htmlspecialchars($subjectData['subject_name']); ?></h4>
                                                 <p class="text-gray-600"><strong>Code:</strong> <?php echo htmlspecialchars($subjectData['subject_code'] ?? ''); ?></p>
                                                 <p class="text-gray-600"><strong>Semester:</strong> <?php echo htmlspecialchars($subjectData['semester'] ?? ''); ?></p>
-                                                
                                                 <div class="schedule-list mt-2 pl-4">
                                                     <p class="font-medium text-gray-700">All Schedules:</p>
                                                     <?php foreach ($subjectData['schedules'] as $schedule): ?>
@@ -1211,10 +1166,6 @@ try {
                                                         </div>
                                                     <?php endforeach; ?>
                                                 </div>
-                                                
-                                                <?php if (!empty($subjectData['description'])): ?>
-                                                    <p class="description text-gray-500 italic mt-2 pt-2 border-t border-gray-200"><?php echo htmlspecialchars($subjectData['description']); ?></p>
-                                                <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     <?php else: ?>
@@ -1246,10 +1197,8 @@ try {
                                                     $interval = $today->diff($eventDate);
                                                     $daysDiff = $interval->days;
                                                     
-                                                    // Format date as "Month day, Year"
                                                     $formattedDate = date('F j, Y', strtotime($event['event_date']));
                                                     
-                                                    // Always show in format: "Today - February 1, 2026"
                                                     if ($daysDiff == 0) {
                                                         echo 'Today - ' . $formattedDate;
                                                     } elseif ($daysDiff == 1) {
@@ -1365,69 +1314,70 @@ try {
         </div>
     </div>
 
-    <!-- All JavaScript functions are included inline -->
     <script>
-        // CHART IMPLEMENTATION
         let chartInstance = null;
 
         function updateChart() {
-        const dataTypeEl = document.getElementById('dataTypeFilter');
-        const gradeEl = document.getElementById('chartGradeFilter');
-        const sectionEl = document.getElementById('chartSectionFilter');
+            const dataTypeEl = document.getElementById('dataTypeFilter');
+            const gradeEl = document.getElementById('chartGradeFilter');
+            const sectionEl = document.getElementById('chartSectionFilter');
 
-        if (!dataTypeEl || !gradeEl || !sectionEl) {
-            console.error('One or more filter elements are missing from the DOM.');
-            return;
+            if (!dataTypeEl || !gradeEl || !sectionEl) {
+                console.error('One or more filter elements are missing from the DOM.');
+                return;
+            }
+
+            const dataType = dataTypeEl.value;
+            const grade = gradeEl.value;
+            const section = sectionEl.value;
+
+            let url = `php/get_enrollment_chart_data.php?data_type=${encodeURIComponent(dataType)}`;
+            if (grade) url += `&grade=${encodeURIComponent(grade)}`;
+            if (section) url += `&section=${encodeURIComponent(section)}`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderChart(data.labels, data.values);
+                        if (grade && data.sections) {
+                            populateSectionDropdown(data.sections);
+                        }
+                    } else {
+                        console.error('Chart data error:', data.message);
+                    }
+                })
+                .catch(err => console.error('Error fetching chart data:', err));
         }
 
-        const dataType = dataTypeEl.value;
-        const grade = gradeEl.value;
-        const section = sectionEl.value;
-
-        let url = `php/get_enrollment_chart_data.php?data_type=${encodeURIComponent(dataType)}`;
-        if (grade) url += `&grade=${encodeURIComponent(grade)}`;
-        if (section) url += `&section=${encodeURIComponent(section)}`;
-
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    renderChart(data.labels, data.values);
-                } else {
-                    console.error('Chart data error:', data.message);
-                }
-            })
-            .catch(err => console.error('Error fetching chart data:', err));
-}
-
         function renderChart(labels, values) {
-        const ctx = document.getElementById('enrollmentChart').getContext('2d');
-        if (chartInstance) chartInstance.destroy();
+            const ctx = document.getElementById('enrollmentChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
 
-        const dataTypeEl = document.getElementById('dataTypeFilter');
-        const label = dataTypeEl ? (dataTypeEl.value === 'students' ? 'Registered Students' : 'Enrollment Requests') : 'Count';
+            const dataTypeEl = document.getElementById('dataTypeFilter');
+            const label = dataTypeEl ? (dataTypeEl.value === 'students' ? 'Registered Students' : 'Enrollment Requests') : 'Count';
 
-        chartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: label,
-                    data: values,
-                    borderColor: '#0a2d63',
-                    backgroundColor: 'rgba(10,45,99,0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: values,
+                        borderColor: '#0a2d63',
+                        backgroundColor: 'rgba(10,45,99,0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
 
         function populateSectionDropdown(sections) {
             const select = document.getElementById('chartSectionFilter');
@@ -1440,40 +1390,100 @@ try {
             });
         }
 
-        // Load chart on page load for admin
         document.addEventListener('DOMContentLoaded', function() {
             <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
             updateChart();
             <?php endif; ?>
         });
 
-        function navigateTo(page) {
-            // No sidebar toggle needed
-            
-            // Remove active class from all menu items
-            const menuItems = document.querySelectorAll('.sidebar ul li a');
-            menuItems.forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            // Add active class to clicked menu item
-            const clickedItem = document.getElementById(`menu-${page}`);
-            if (clickedItem) {
-                clickedItem.classList.add('active');
+        function renderStudentChart() {
+            const homeCard = document.getElementById('homeCard');
+            if (!homeCard || !homeCard.classList.contains('active')) return;
+
+            const canvas = document.getElementById('studentGradeChart');
+            if (!canvas) return;
+
+            if (window.studentChart) window.studentChart.destroy();
+
+            const gradeData = <?php 
+                $chartData = [];
+                if (!empty($grades)) {
+                    $groupedGrades = [];
+                    foreach ($grades as $grade) {
+                        $subjectName = $grade['subject_name'];
+                        $quarter = $grade['quarter'];
+                        if (!isset($groupedGrades[$subjectName])) {
+                            $groupedGrades[$subjectName] = [
+                                'quarters' => [],
+                                'average' => 0,
+                                'count' => 0,
+                                'total' => 0
+                            ];
+                        }
+                        $groupedGrades[$subjectName]['quarters'][$quarter] = $grade['grade'];
+                        $groupedGrades[$subjectName]['count']++;
+                        $groupedGrades[$subjectName]['total'] += $grade['grade'];
+                    }
+                    foreach ($groupedGrades as $subject => $data) {
+                        if ($data['count'] > 0) {
+                            $avg = round($data['total'] / $data['count']);
+                            if ($avg > 0) {
+                                $chartData[] = [
+                                    'subject' => $subject,
+                                    'grade' => $avg
+                                ];
+                            }
+                        }
+                    }
+                }
+                echo json_encode($chartData);
+            ?>;
+
+            const container = document.querySelector('#homeCard .chart-container');
+            if (gradeData.length === 0) {
+                if (container) container.style.display = 'none';
+                return;
+            } else {
+                if (container) container.style.display = 'block';
             }
-            
-            // Hide all cards
-            const allCards = document.querySelectorAll('.dashboard-card');
-            allCards.forEach(card => {
-                card.classList.remove('active');
+
+            const ctx = canvas.getContext('2d');
+            window.studentChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: gradeData.map(item => item.subject),
+                    datasets: [{
+                        label: 'Average Grade',
+                        data: gradeData.map(item => item.grade),
+                        backgroundColor: '#4e73df',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    }
+                }
             });
+        }
+
+        function navigateTo(page) {
+            const menuItems = document.querySelectorAll('.sidebar ul li a');
+            menuItems.forEach(item => item.classList.remove('active'));
             
-            // Show the selected card based on user role
+            const clickedItem = document.getElementById(`menu-${page}`);
+            if (clickedItem) clickedItem.classList.add('active');
+            
+            const allCards = document.querySelectorAll('.dashboard-card');
+            allCards.forEach(card => card.classList.remove('active'));
+            
             <?php if ($userRole == 'student'): ?>
-            // Student navigation
             switch(page) {
                 case 'home':
                     document.getElementById('homeCard').classList.add('active');
+                    renderStudentChart();
                     break;
                 case 'grades':
                     document.getElementById('gradesCard').classList.add('active');
@@ -1496,9 +1506,7 @@ try {
                     loadAnnouncements();
                     break;
             }
-            
             <?php elseif (in_array($userRole, ['admin', 'super_admin'])): ?>
-            // Admin navigation
             switch(page) {
                 case 'home':
                     document.getElementById('adminEnrollmentCard').classList.add('active');
@@ -1506,35 +1514,24 @@ try {
                     break;
                 case 'users':
                     document.getElementById('usersCard').classList.add('active');
-                    loadUsers();
                     break;
                 case 'payables':
                     document.getElementById('payablesManagementCard').classList.add('active');
-                    setTimeout(() => {
-                        if (typeof loadStudents === 'function') {
-                            loadStudents();
-                        }
-                    }, 100);
+                    setTimeout(() => { if (typeof loadStudents === 'function') loadStudents(); }, 100);
                     break;
                 case 'payments':
                     document.getElementById('paymentsCard').classList.add('active');
-                    if (typeof loadPaymentStudents === 'function') {
-                        loadPaymentStudents();
-                    }
+                    if (typeof loadPaymentStudents === 'function') loadPaymentStudents();
                     break;
                 case 'profile':
                     document.getElementById('adminProfileCard').classList.add('active');
                     break;
             }
-            
             <?php elseif ($userRole == 'teacher'): ?>
-            // Teacher navigation
             document.getElementById('teacherCard').classList.add('active');
-            
             <?php endif; ?>
         }
 
-        // Toggle between today's subjects and all subjects in Home Card
         function toggleHomeSubjects() {
             const todayList = document.getElementById('todaySubjectList');
             const allList = document.getElementById('allSubjectList');
@@ -1542,13 +1539,11 @@ try {
             
             if (todayList && allList && viewAllBtn) {
                 if (todayList.style.display === 'none' || todayList.style.display === '') {
-                    // Show today's subjects
                     todayList.style.display = 'block';
                     allList.style.display = 'none';
                     viewAllBtn.textContent = 'View All Subjects';
                     viewAllBtn.style.background = '#0a2d63';
                 } else {
-                    // Show all subjects
                     todayList.style.display = 'none';
                     allList.style.display = 'block';
                     viewAllBtn.textContent = 'View Today\'s Subjects';
@@ -1557,7 +1552,6 @@ try {
             }
         }
 
-        // Toggle between today's subjects and all subjects in Subjects Card
         function toggleSubjectCard() {
             const todayList = document.getElementById('todaySubjectsCardList');
             const allList = document.getElementById('allSubjectsCardList');
@@ -1565,13 +1559,11 @@ try {
             
             if (todayList && allList && viewAllBtn) {
                 if (allList.style.display === 'none' || allList.style.display === '') {
-                    // Show all subjects
                     todayList.style.display = 'none';
                     allList.style.display = 'block';
                     viewAllBtn.textContent = 'View Today\'s Subjects';
                     viewAllBtn.style.background = '#0a2d63';
                 } else {
-                    // Show today's subjects
                     todayList.style.display = 'block';
                     allList.style.display = 'none';
                     viewAllBtn.textContent = 'View All Subjects';
@@ -1580,13 +1572,9 @@ try {
             }
         }
 
-        // Load payables for student
         function loadPayables() {
-            // Clear previous content first
             const payableList = document.getElementById('payableList');
             payableList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading payables...</div>';
-        
-            // Add timestamp to prevent caching
             const timestamp = new Date().getTime();
         
             fetch('php/get_payables.php?_=' + timestamp)
@@ -1598,15 +1586,13 @@ try {
                             const dueDate = new Date(payable.due_date);
                             const today = new Date();
                         
-                            // First check if status is 'paid'
                             if (payable.status === 'paid') {
-                                // Already handled
+                                // handled
                             } else if (payable.status === 'partially_paid') {
-                                // Show partially paid status
                                 html += `
                                     <div class="payable-item bg-gray-50 p-6 hover:bg-gray-100 transition flex flex-col md:flex-row justify-between items-start md:items-center">
                                         <div class="payable-details flex-1">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">${payable.item_name}</h4>
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">Tuition Fee</h4>
                                             <p class="text-gray-600 mb-2">Due: <span class="payable-date bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm">${dueDate.toLocaleDateString()}</span></p>
                                             <p class="text-blue-600 text-sm">Partially Paid</p>
                                         </div>
@@ -1618,11 +1604,10 @@ try {
                                 `;
                             } else {
                                 const isOverdue = dueDate < today;
-                                
                                 html += `
                                     <div class="payable-item bg-gray-50 p-6 hover:bg-gray-100 transition flex flex-col md:flex-row justify-between items-start md:items-center">
                                         <div class="payable-details flex-1">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">${payable.item_name}</h4>
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">Tuition Fee</h4>
                                             <p class="text-gray-600 mb-2">Due: <span class="payable-date bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm">${dueDate.toLocaleDateString()}</span></p>
                                         </div>
                                         <div class="payable-amount text-right min-w-[150px]">
@@ -1644,7 +1629,6 @@ try {
                 });
         }
 
-        // Load announcements
         function loadAnnouncements() {
             fetch('php/get_announcements.php')
                 .then(response => response.json())
@@ -1675,97 +1659,11 @@ try {
                 });
         }
 
-        // ADMIN FUNCTIONS
-        // Load and display all users
-        function loadUsers() {
-            const userList = document.getElementById('userList');
-            if (!userList) {
-                console.log('userList element not found');
-                return;
-            }
-            userList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading users...</div>';
-
-            fetch('php/get_users.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.users) {
-                        displayUsers(data.users);
-                    } else {
-                        userList.innerHTML = '<div class="text-center text-gray-500 py-5">Error loading users: ' + (data.message || 'Unknown error') + '</div>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading users:', error);
-                    userList.innerHTML = '<div class="text-center text-red-600 py-5">Error loading users. Please try again.</div>';
-                });
-        }
-
-        function displayUsers(users) {
-            const userList = document.getElementById('userList');
-            
-            if (users.length === 0) {
-                userList.innerHTML = '<div class="text-center text-gray-500 py-5">No users found.</div>';
-                return;
-            }
-            
-            let html = `
-                <div class="mt-5 p-5 bg-gray-50 rounded">
-                    <h4 class="text-lg font-semibold text-[#0a2d63] mb-4">User List</h4>
-                    <div class="overflow-x-auto">
-                        <table class="w-full border-collapse bg-white">
-                            <thead>
-                                <tr class="bg-[#0a2d63] text-white">
-                                    <th class="p-3 text-left font-semibold">Full Name</th>
-                                    <th class="p-3 text-left font-semibold">Username</th>
-                                    <th class="p-3 text-left font-semibold">Email</th>
-                                    <th class="p-3 text-left font-semibold">Role</th>
-                                    <th class="p-3 text-left font-semibold">Grade Level</th>
-                                    <th class="p-3 text-left font-semibold">Section</th>
-                                    <th class="p-3 text-left font-semibold">LRN</th>
-                                    <th class="p-3 text-left font-semibold">Created At</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
-            
-            users.forEach(user => {
-                const created = new Date(user.created_at).toLocaleDateString();
-                const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
-                let roleColor = user.role === 'admin' || user.role === 'super_admin' ? '#0a2d63' : (user.role === 'teacher' ? '#10b981' : '#6c757d');
-                
-                html += `
-                    <tr class="border-b border-gray-200 hover:bg-gray-50">
-                        <td class="p-3">${user.full_name || 'N/A'}</td>
-                        <td class="p-3">${user.username || 'N/A'}</td>
-                        <td class="p-3">${user.email || 'N/A'}</td>
-                        <td class="p-3">
-                            <span class="px-2 py-1 rounded text-xs font-semibold text-white" style="background: ${roleColor};">${roleDisplay}</span>
-                        </td>
-                        <td class="p-3">${user.grade_level || 'N/A'}</td>
-                        <td class="p-3">${user.section || 'N/A'}</td>
-                        <td class="p-3">${user.lrn || 'N/A'}</td>
-                        <td class="p-3">${created}</td>
-                    </tr>
-                `;
-            });
-            
-            html += `
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-            
-            userList.innerHTML = html;
-        }
-
-        // Load enrollments for admin with pagination
         <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
         let currentPage = 1;
         let perPage = 10;
         let totalEnrollments = <?php echo $totalEnrollments; ?>;
         let allEnrollments = [];
-        <?php endif; ?>
 
         function loadEnrollments(page = currentPage) {
             currentPage = page;
@@ -1849,10 +1747,8 @@ try {
             
             let buttonsHtml = '';
             
-            // Previous button
             buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="loadEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
             
-            // Page numbers
             for (let i = 1; i <= totalPages; i++) {
                 if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
                     buttonsHtml += `<button class="pagination-btn border border-gray-300 px-3 py-1 rounded text-sm ${i === page ? 'bg-[#0a2d63] text-white border-[#0a2d63]' : 'bg-white hover:bg-gray-100'}" onclick="loadEnrollments(${i})">${i}</button>`;
@@ -1861,7 +1757,6 @@ try {
                 }
             }
             
-            // Next button
             buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="loadEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
             
             paginationButtons.innerHTML = buttonsHtml;
@@ -1892,7 +1787,6 @@ try {
             }
         }
 
-        // Accept enrollment – fetch details and open modal
         function acceptEnrollment(enrollmentId) {
             fetch(`php/get_enrollment_details.php?id=${enrollmentId}`)
                 .then(response => response.json())
@@ -1909,40 +1803,33 @@ try {
                 });
         }
 
-        // Open Add User modal with pre-filled enrollment data
         function openAddUserModalWithEnrollment(enrollee) {
-            closeAddUserModal(); // reset first
+            closeAddUserModal();
 
             const modal = document.getElementById('addUserModal');
             if (modal) modal.style.display = 'flex';
 
-            // Helper to safely set element value by ID
             function setElementValue(id, value) {
                 const el = document.getElementById(id);
                 if (el) el.value = value || '';
             }
 
-            // Helper to set field by name (for email, fullName)
             function setFieldByName(name, value) {
                 const field = document.querySelector(`[name="${name}"]`);
                 if (field) field.value = value || '';
             }
 
-            // Set role to student and disable selector
             const roleSelect = document.getElementById('modalRoleSelect');
             if (roleSelect) {
                 roleSelect.value = 'student';
                 roleSelect.disabled = true;
             }
 
-            // Show student fields
             toggleModalStudentFields();
 
-            // Fill grade level and update sections
             setElementValue('modalGradeLevel', enrollee.grade_level);
-            updateModalSections(); // populate sections based on grade
+            updateModalSections();
 
-            // Small delay to ensure sections are populated, then set section
             setTimeout(() => {
                 setElementValue('modalSectionSelect', enrollee.section);
             }, 50);
@@ -1952,44 +1839,35 @@ try {
             setElementValue('modalGender', enrollee.gender);
             setElementValue('modalBirthdate', enrollee.birthdate);
 
-            // Phone: remove +63 prefix if present
             let phoneValue = enrollee.phone || '';
             if (phoneValue.startsWith('+63')) phoneValue = phoneValue.substring(3);
             setElementValue('modalPhone', phoneValue);
 
-            // Strand (if any)
             if (enrollee.strand) {
                 setElementValue('modalStrand', enrollee.strand);
-                // Show strand container if grade is 11/12 (already handled by updateModalSections, but ensure it's visible)
                 const strandContainer = document.getElementById('modalStrandContainer');
                 if (strandContainer && (enrollee.grade_level === 'Grade 11' || enrollee.grade_level === 'Grade 12')) {
-            strandContainer.classList.remove('hidden');
+                    strandContainer.classList.remove('hidden');
                 }
             }
 
-            // Set name fields from individual enrollment fields (no splitting needed!)
             setFieldByName('first_name', enrollee.first_name || '');
             setFieldByName('middle_name', enrollee.middle_name || '');
             setFieldByName('last_name', enrollee.last_name || '');
             setFieldByName('suffix', enrollee.suffix || '');
 
-            // Email
             setFieldByName('email', enrollee.email);
 
-            // Set default password
             const passwordField = document.querySelector('input[name="password"]');
             if (passwordField) passwordField.value = 'baa123';
 
-            // Clear username field for admin to enter
             const usernameField = document.querySelector('input[name="username"]');
             if (usernameField) usernameField.value = '';
 
-            // Store enrollment ID in hidden field
             const enrollmentIdField = document.getElementById('modalEnrollmentId');
             if (enrollmentIdField) enrollmentIdField.value = enrollee.id;
         }
 
-        // View documents function
         function viewDocuments(enrollmentId) {
             if (!enrollmentId) {
                 alert('Invalid enrollment ID');
@@ -2001,75 +1879,27 @@ try {
             documentList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading documents...</div>';
     
             fetch(`php/get_enrollment_documents.php?enrollment_id=${enrollmentId}`)
-            .then(response => response.json())
-            .then(data => {
-                console.log('Documents data received:', data); // Debug log
-            
-                if (data.success) {
-                    // Check if documents array exists and has items
-                    if (data.documents && Array.isArray(data.documents) && data.documents.length > 0) {
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.documents && data.documents.length > 0) {
                         let html = '<div class="document-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">';
-                        
                         data.documents.forEach(doc => {
-                            // Get filename - check different possible field names
                             let fileName = doc.document_filename || doc.file_name || 'Document';
-                            let fileExt = '';
-                            
-                            // Safely split filename
-                            if (fileName && typeof fileName === 'string' && fileName.includes('.')) {
-                                fileExt = fileName.split('.').pop().toLowerCase();
-                            }
-                            
-                            // Determine icon based on file extension (text-based)
-                            let icon = '[FILE]'; // Default icon
-                            if (fileExt) {
-                                if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExt)) 
-                                    icon = '[IMAGE]';
-                                else if (['pdf'].includes(fileExt)) 
-                                    icon = '[PDF]';
-                                else if (['doc', 'docx'].includes(fileExt)) 
-                                    icon = '[DOC]';
-                                else if (['xls', 'xlsx', 'csv'].includes(fileExt)) 
-                                    icon = '[SPREADSHEET]';
-                                else if (['ppt', 'pptx'].includes(fileExt)) 
-                                    icon = '[PRESENTATION]';
-                                else if (['txt', 'rtf'].includes(fileExt)) 
-                                    icon = '[TEXT]';
-                                else if (['zip', 'rar', '7z'].includes(fileExt)) 
-                                    icon = '[ARCHIVE]';
-                            }
-                            
-                            // Get document type or use filename as fallback
+                            let fileExt = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+                            let icon = '[FILE]';
+                            if (['jpg','jpeg','png','gif','bmp','webp'].includes(fileExt)) icon = '[IMAGE]';
+                            else if (['pdf'].includes(fileExt)) icon = '[PDF]';
+                            else if (['doc','docx'].includes(fileExt)) icon = '[DOC]';
+                            else if (['xls','xlsx','csv'].includes(fileExt)) icon = '[SPREADSHEET]';
+                            else if (['ppt','pptx'].includes(fileExt)) icon = '[PRESENTATION]';
+                            else if (['txt','rtf'].includes(fileExt)) icon = '[TEXT]';
+                            else if (['zip','rar','7z'].includes(fileExt)) icon = '[ARCHIVE]';
+
                             let docType = doc.document_type || 'Document';
-                            
-                            // Get file path - handle different possible field names
                             let filePath = doc.document_path || doc.file_path || doc.path || '';
-                            
-                            // Make sure the path is correct for viewing
-                            if (filePath && !filePath.startsWith('/') && !filePath.startsWith('http')) {
-                                // Ensure the path is relative to the root
-                                filePath = filePath;
-                            }
-                            
-                            // Format file size
-                            let fileSize = '';
-                            if (doc.file_size) {
-                                let size = parseInt(doc.file_size);
-                                if (size < 1024) {
-                                    fileSize = size + ' B';
-                                } else if (size < 1024 * 1024) {
-                                    fileSize = (size / 1024).toFixed(1) + ' KB';
-                                } else {
-                                    fileSize = (size / (1024 * 1024)).toFixed(1) + ' MB';
-                                }
-                            }
-                            
-                            // Format date
-                            let uploadDate = '';
-                            if (doc.created_at) {
-                                uploadDate = new Date(doc.created_at).toLocaleDateString();
-                            }
-                            
+                            let fileSize = doc.file_size ? (parseInt(doc.file_size) < 1024 ? parseInt(doc.file_size) + ' B' : (parseInt(doc.file_size) < 1048576 ? (parseInt(doc.file_size)/1024).toFixed(1) + ' KB' : (parseInt(doc.file_size)/1048576).toFixed(1) + ' MB')) : '';
+                            let uploadDate = doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '';
+
                             html += `
                                 <div class="document-item bg-gray-50 border border-gray-200 rounded p-5 text-center hover:-translate-y-1 hover:shadow-md transition">
                                     <div class="document-icon text-sm font-bold text-[#0a2d63] bg-gray-200 px-3 py-1 rounded inline-block mx-auto mb-4 font-mono">${icon}</div>
@@ -2084,27 +1914,22 @@ try {
                                 </div>
                             `;
                         });
-                        
                         html += '</div>';
                         documentList.innerHTML = html;
                     } else {
                         documentList.innerHTML = '<div class="text-center text-gray-500 py-10">No documents uploaded for this enrollment.</div>';
                     }
-                } else {
-                    documentList.innerHTML = '<div class="text-center text-gray-500 py-10">' + (data.message || 'Error loading documents.') + '</div>';
-                }
-            })
-            .catch(error => {
-                console.error('Error loading documents:', error);
-                documentList.innerHTML = '<div class="text-center text-red-600 py-10">Error loading documents. Please try again.</div>';
-            });
+                })
+                .catch(error => {
+                    console.error('Error loading documents:', error);
+                    documentList.innerHTML = '<div class="text-center text-red-600 py-10">Error loading documents. Please try again.</div>';
+                });
         }
 
         function closeDocumentModal() {
             document.getElementById('documentModal').style.display = 'none';
         }
 
-        // Enrollment Search Modal Functions
         function openEnrollmentSearchModal() {
             document.getElementById('enrollmentSearchModal').style.display = 'flex';
             filterEnrollments();
@@ -2122,36 +1947,28 @@ try {
             
             const searchTerm = document.getElementById('enrollmentSearchInput').value.toLowerCase();
             
-            // Get status filters
             const filterPending = document.getElementById('filterPending')?.checked || false;
             const filterApproved = document.getElementById('filterApproved')?.checked || false;
             const filterNeedsDocs = document.getElementById('filterNeedsDocs')?.checked || false;
             const filterRejected = document.getElementById('filterRejected')?.checked || false;
             
-            // Build active status array
             const activeStatuses = [];
             if (filterPending) activeStatuses.push('pending');
             if (filterApproved) activeStatuses.push('approved');
             if (filterNeedsDocs) activeStatuses.push('needs_docs');
             if (filterRejected) activeStatuses.push('rejected');
             
-            // Filter enrollments
             let filtered = allEnrollments.filter(enrollment => {
-                // Search term filter
                 const matchesSearch = searchTerm === '' || 
                     enrollment.full_name?.toLowerCase().includes(searchTerm) ||
                     enrollment.email?.toLowerCase().includes(searchTerm) ||
                     enrollment.phone?.toLowerCase().includes(searchTerm);
                 
                 if (!matchesSearch) return false;
-                
-                // Status filter
                 if (activeStatuses.length > 0 && !activeStatuses.includes(enrollment.status)) return false;
-                
                 return true;
             });
             
-            // Calculate pagination
             const totalFiltered = filtered.length;
             const startIndex = (enrollmentSearchPage - 1) * enrollmentSearchPerPage;
             const endIndex = Math.min(startIndex + enrollmentSearchPerPage, totalFiltered);
@@ -2216,11 +2033,8 @@ try {
             paginationInfo.textContent = `Showing ${start} to ${end} of ${total} results`;
             
             let buttonsHtml = '';
-            
-            // Previous button
             buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="filterEnrollments(${page - 1})" ${page === 1 ? 'disabled' : ''}>Previous</button>`;
             
-            // Page numbers
             for (let i = 1; i <= totalPages; i++) {
                 if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
                     buttonsHtml += `<button class="pagination-btn border border-gray-300 px-3 py-1 rounded text-sm ${i === page ? 'bg-[#0a2d63] text-white border-[#0a2d63]' : 'bg-white hover:bg-gray-100'}" onclick="filterEnrollments(${i})">${i}</button>`;
@@ -2229,7 +2043,6 @@ try {
                 }
             }
             
-            // Next button
             buttonsHtml += `<button class="pagination-btn border border-gray-300 bg-white px-3 py-1 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" onclick="filterEnrollments(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Next</button>`;
             
             paginationButtons.innerHTML = buttonsHtml;
@@ -2263,8 +2076,8 @@ try {
         function viewEnrollmentDetails(enrollmentId) {
             closeEnrollmentSearchModal();
         }
+        <?php endif; ?>
 
-        // Load students for Payables Management tab
         let studentsData = [];
 
         function loadStudents() {
@@ -2284,19 +2097,16 @@ try {
                         });
                         studentSelect.innerHTML = options;
 
-                        // Add change event listener
                         studentSelect.addEventListener('change', function() {
                             const selectedId = this.value;
                             const student = studentsData.find(s => s.id == selectedId);
                             const tuitionField = document.getElementById('tuitionFee');
                             if (student && student.grade_level && gradeFees[student.grade_level]) {
-                                // Fetch breakdown from server
                                 fetch(`php/get_fee_breakdown.php?grade=${encodeURIComponent(student.grade_level)}`)
                                     .then(res => res.json())
                                     .then(data => {
                                         if (data.success) {
                                             tuitionField.value = data.breakdown.tuition.toFixed(2);
-                                            // Store breakdown in dataset for later use
                                             const selectedOption = studentSelect.options[studentSelect.selectedIndex];
                                             selectedOption.dataset.breakdown = JSON.stringify(data.breakdown);
                                         } else {
@@ -2321,7 +2131,6 @@ try {
                 });
         }
 
-        // Load students for Payment Processing
         function loadPaymentStudents() {
             const studentSelect = document.getElementById('paymentStudentSelect');
             if (!studentSelect) return;
@@ -2349,7 +2158,6 @@ try {
                 });
         }
 
-        // Calculate payables
         function calculatePayables() {
             const studentId = document.getElementById('studentSelect').value;
             const tuitionFee = parseFloat(document.getElementById('tuitionFee').value);
@@ -2377,12 +2185,10 @@ try {
                 return;
             }
             
-            // Calculate remaining balance
             const totalPayable = tuitionFee - discounts;
             const remainingBalance = totalPayable - downPayment;
             const monthlyPaymentAmount = remainingBalance / monthlyPayments;
             
-            // Get breakdown from dataset
             const studentSelect = document.getElementById('studentSelect');
             const selectedOption = studentSelect.options[studentSelect.selectedIndex];
             let breakdown = {};
@@ -2392,7 +2198,6 @@ try {
                 breakdown = { tuition: tuitionFee, misc: 0, aircon: 0, hsa: 0, books: 0 };
             }
             
-            // Display result
             const resultContent = document.getElementById('resultContent');
             const calculationResult = document.getElementById('calculationResult');
             const addPayableBtn = document.getElementById('addPayableBtn');
@@ -2400,30 +2205,12 @@ try {
             
             resultContent.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                    <div>
-                        <strong class="text-gray-700">Tuition Fee:</strong>
-                        <div class="text-lg text-[#0a2d63]">₱${breakdown.tuition.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <strong class="text-gray-700">Miscellaneous:</strong>
-                        <div class="text-lg text-[#0a2d63]">₱${breakdown.misc.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <strong class="text-gray-700">Aircon Fee:</strong>
-                        <div class="text-lg text-[#0a2d63]">₱${breakdown.aircon.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <strong class="text-gray-700">HSA Fee:</strong>
-                        <div class="text-lg text-[#0a2d63]">₱${breakdown.hsa.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <strong class="text-gray-700">Books:</strong>
-                        <div class="text-lg text-[#0a2d63]">₱${breakdown.books.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <strong class="text-gray-700">Discounts/Grants:</strong>
-                        <div class="text-lg text-green-600">₱${discounts.toFixed(2)}</div>
-                    </div>
+                    <div><strong class="text-gray-700">Tuition Fee:</strong><div class="text-lg text-[#0a2d63]">₱${breakdown.tuition.toFixed(2)}</div></div>
+                    <div><strong class="text-gray-700">Miscellaneous:</strong><div class="text-lg text-[#0a2d63]">₱${breakdown.misc.toFixed(2)}</div></div>
+                    <div><strong class="text-gray-700">Aircon Fee:</strong><div class="text-lg text-[#0a2d63]">₱${breakdown.aircon.toFixed(2)}</div></div>
+                    <div><strong class="text-gray-700">HSA Fee:</strong><div class="text-lg text-[#0a2d63]">₱${breakdown.hsa.toFixed(2)}</div></div>
+                    <div><strong class="text-gray-700">Books:</strong><div class="text-lg text-[#0a2d63]">₱${breakdown.books.toFixed(2)}</div></div>
+                    <div><strong class="text-gray-700">Discounts/Grants:</strong><div class="text-lg text-green-600">₱${discounts.toFixed(2)}</div></div>
                 </div>
                 <div class="text-center p-4 bg-blue-50 rounded-lg my-4">
                     <strong class="block mb-1 text-[#0a2d63]">Remaining Balance:</strong>
@@ -2439,7 +2226,6 @@ try {
             addPayableBtn.style.display = 'inline-block';
             generatePdfBtn.style.display = 'inline-block';
             
-            // Store calculated values for later use
             window.calculatedPayables = {
                 studentId: studentId,
                 tuitionFee: breakdown.tuition,
@@ -2455,7 +2241,6 @@ try {
             };
         }
 
-        // Generate Assessment PDF
         function generateAssessmentPDF() {
             if (!window.calculatedPayables) {
                 alert('No calculation data available. Please calculate first.');
@@ -2463,13 +2248,11 @@ try {
             }
             const data = window.calculatedPayables;
 
-            // Create a form to POST data
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = 'php/generate_assessment_pdf.php';
             form.target = '_blank';
 
-            // Add all needed fields
             const fields = {
                 student_id: data.studentId,
                 tuition: data.tuitionFee,
@@ -2497,7 +2280,6 @@ try {
             document.body.removeChild(form);
         }
 
-        // Add payable to student
         function addPayable() {
             if (!window.calculatedPayables) {
                 alert('Please calculate payables first');
@@ -2506,16 +2288,13 @@ try {
             
             const { studentId, tuitionFee, discounts, downPayment, remainingBalance, monthlyPayments, monthlyPaymentAmount } = window.calculatedPayables;
             
-            // Get student name for display
             const studentSelect = document.getElementById('studentSelect');
             const studentName = studentSelect.options[studentSelect.selectedIndex].text;
             
-            // Show confirmation dialog
             if (!confirm(`Add payables for ${studentName}?\n\nTotal: ₱${tuitionFee.toFixed(2)}\nDiscounts: ₱${discounts.toFixed(2)}\nDown Payment: ₱${downPayment.toFixed(2)}\nRemaining Balance: ₱${remainingBalance.toFixed(2)}\nMonthly Payment: ₱${monthlyPaymentAmount.toFixed(2)} x ${monthlyPayments} months`)) {
                 return;
             }
             
-            // Prepare data for API
             const formData = new FormData();
             formData.append('student_id', studentId);
             formData.append('tuition_fee', tuitionFee);
@@ -2533,7 +2312,6 @@ try {
             .then(data => {
                 if (data.success) {
                     alert('Payables added successfully!');
-                    // Reset form
                     document.getElementById('payablesForm').reset();
                     document.getElementById('calculationResult').style.display = 'none';
                     document.getElementById('addPayableBtn').style.display = 'none';
@@ -2549,7 +2327,6 @@ try {
             });
         }
 
-        // Load student payables for payment processing
         function loadStudentPayables() {
             const studentId = document.getElementById('paymentStudentSelect').value;
             
@@ -2620,7 +2397,6 @@ try {
             payablesList.innerHTML = html;
         }
         
-        // Process payment
         function processPayment() {
             const studentId = document.getElementById('paymentStudentSelect').value;
             const amount = document.getElementById('paymentAmount').value;
@@ -2651,12 +2427,8 @@ try {
                 if (data.success) {
                     paymentResult.style.display = 'block';
                     paymentResult.innerHTML = data.message;
-                    
-                    // Reset form
                     document.getElementById('paymentAmount').value = '';
                     document.getElementById('paymentDate').value = '<?php echo date('Y-m-d'); ?>';
-                    
-                    // Reload student payables
                     loadStudentPayables();
                 } else {
                     alert('Error processing payment: ' + data.message);
@@ -2668,7 +2440,6 @@ try {
             });
         }
         
-        // Toggle student-specific fields in modal based on role selection
         function toggleModalStudentFields() {
             const roleSelect = document.getElementById('modalRoleSelect');
             const studentFields = document.getElementById('modalStudentFields');
@@ -2686,11 +2457,9 @@ try {
                 gradeLevel.required = false;
                 sectionSelect.required = false;
                 lrnField.required = false;
-                // Clear student fields
                 gradeLevel.value = '';
                 sectionSelect.innerHTML = '<option value="">Select Section</option>';
                 lrnField.value = '';
-                // Also clear new fields
                 document.getElementById('modalAge').value = '';
                 document.getElementById('modalGender').value = '';
                 document.getElementById('modalBirthdate').value = '';
@@ -2700,14 +2469,12 @@ try {
             }
         }
 
-        // Update available sections based on selected grade level in modal
         function updateModalSections() {
             const gradeLevel = document.getElementById('modalGradeLevel').value;
             const sectionSelect = document.getElementById('modalSectionSelect');
             const strandContainer = document.getElementById('modalStrandContainer');
             const strandSelect = document.getElementById('modalStrand');
             
-            // Define grade-section mapping
             const gradeSections = {
                 'Grade 7': ['Love', 'Joy'],
                 'Grade 8': ['Patience', 'Peace'],
@@ -2717,10 +2484,8 @@ try {
                 'Grade 12': ['Humility', 'Meekness']
             };
             
-            // Clear current options
             sectionSelect.innerHTML = '<option value="">Select Section</option>';
             
-            // Add options based on selected grade
             if (gradeLevel && gradeSections[gradeLevel]) {
                 gradeSections[gradeLevel].forEach(section => {
                     const option = document.createElement('option');
@@ -2730,7 +2495,6 @@ try {
                 });
             }
 
-            // Strand visibility for Grade 11 & 12
             if (gradeLevel === 'Grade 11' || gradeLevel === 'Grade 12') {
                 strandContainer.classList.remove('hidden');
                 strandSelect.setAttribute('required', 'required');
@@ -2741,7 +2505,6 @@ try {
             }
         }
 
-        // Update filter sections based on selected grade level
         function updateFilterSections() {
             const gradeLevel = document.getElementById('filterGradeLevel').value;
             const filterSectionContainer = document.getElementById('filterSectionContainer');
@@ -2750,7 +2513,6 @@ try {
             if (gradeLevel) {
                 filterSectionContainer.style.display = 'block';
                 
-                // Define grade-section mapping
                 const gradeSections = {
                     'Grade 7': ['Love', 'Joy'],
                     'Grade 8': ['Patience', 'Peace'],
@@ -2760,10 +2522,8 @@ try {
                     'Grade 12': ['Humility', 'Meekness']
                 };
                 
-                // Clear current options
                 sectionSelect.innerHTML = '<option value="">All Sections</option>';
                 
-                // Add options based on selected grade
                 if (gradeSections[gradeLevel]) {
                     gradeSections[gradeLevel].forEach(section => {
                         const option = document.createElement('option');
@@ -2778,7 +2538,6 @@ try {
             }
         }
 
-        // Modal functions
         function openAddUserModal() {
             document.getElementById('addUserModal').style.display = 'flex';
         }
@@ -2789,7 +2548,6 @@ try {
             document.getElementById('modalStudentFields').style.display = 'none';
             document.getElementById('modalRoleSelect').disabled = false;
 
-            // Safely clear hidden enrollment ID
             const enrollmentIdField = document.getElementById('modalEnrollmentId');
             if (enrollmentIdField) enrollmentIdField.value = '';
         }
@@ -2801,7 +2559,6 @@ try {
 
         function closeSearchModal() {
             document.getElementById('searchUserModal').style.display = 'none';
-            // Reset filters
             document.getElementById('searchInput').value = '';
             document.querySelectorAll('.sort-option').forEach(opt => opt.classList.remove('active'));
             document.getElementById('sort-name').classList.add('active');
@@ -2825,22 +2582,17 @@ try {
             document.getElementById('deleteSearchInput').value = '';
         }
 
-        // Submit add user form
         function submitAddUser() {
             const form = document.getElementById('createUserForm');
             const formData = new FormData(form);
 
-            // Construct full_name from separate name fields
             const firstName = formData.get('first_name') || '';
             const middleName = formData.get('middle_name') || '';
             const lastName = formData.get('last_name') || '';
             const suffix = formData.get('suffix') || '';
-            const fullName = [firstName, middleName, lastName, suffix]
-                .filter(part => part.trim() !== '')
-                .join(' ');
+            const fullName = [firstName, middleName, lastName, suffix].filter(part => part.trim() !== '').join(' ');
             formData.append('full_name', fullName);
 
-            // Ensure role is included (select may be disabled when coming from enrollment)
             const roleSelect = document.getElementById('modalRoleSelect');
             if (roleSelect) {
                 const role = roleSelect.value;
@@ -2849,14 +2601,12 @@ try {
                 }
             }
 
-            // Basic validation
             const username = formData.get('username')?.trim();
             if (!username) {
                 alert('Username is required');
                 return;
             }
 
-            // Show loading state
             const submitBtn = document.querySelector('#addUserModal .bg-\\[\\#0a2d63\\]');
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Creating...';
@@ -2871,48 +2621,41 @@ try {
                 if (data.success) {
                     alert('User created successfully!');
 
-            // If this came from accepting an enrollment, update its status
-            const enrollmentId = document.getElementById('modalEnrollmentId').value;
-            if (enrollmentId) {
-                fetch('php/update_enrollment_after_accept.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `enrollment_id=${enrollmentId}&user_id=${data.user_id}`
-                })
-                .then(res => res.json())
-                .then(updateRes => {
-                    if (updateRes.success) {
-                        if (typeof loadEnrollments === 'function') {
-                            loadEnrollments();
-                        }
-                    } else {
-                        console.error('Failed to update enrollment:', updateRes.message);
+                    const enrollmentId = document.getElementById('modalEnrollmentId').value;
+                    if (enrollmentId) {
+                        fetch('php/update_enrollment_after_accept.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: `enrollment_id=${enrollmentId}&user_id=${data.user_id}`
+                        })
+                        .then(res => res.json())
+                        .then(updateRes => {
+                            if (updateRes.success) {
+                                if (typeof loadEnrollments === 'function') {
+                                    loadEnrollments();
+                                }
+                            } else {
+                                console.error('Failed to update enrollment:', updateRes.message);
+                            }
+                        })
+                        .catch(err => console.error('Error updating enrollment:', err));
                     }
-                })
-                .catch(err => console.error('Error updating enrollment:', err));
-            }
 
-            closeAddUserModal();
-
-            if (typeof loadUsers === 'function' && document.getElementById('usersCard')?.classList.contains('active')) {
-                loadUsers();
-            }
-        } else {
-            alert('Error creating user: ' + (data.message || 'Unknown error'));
+                    closeAddUserModal();
+                } else {
+                    alert('Error creating user: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error creating user:', error);
+                alert('Network error. Please try again.');
+            })
+            .finally(() => {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            });
         }
-    })
-    .catch(error => {
-        console.error('Error creating user:', error);
-        alert('Network error. Please try again.');
-    })
-    .finally(() => {
-        submitBtn.textContent = originalText;
-        submitBtn.disabled = false;
-    });
-}
 
-
-        // Load all users for search
         let allUsers = [];
         
         function loadAllUsersForSearch() {
@@ -2927,7 +2670,6 @@ try {
                 .catch(error => console.error('Error loading users for search:', error));
         }
 
-        // Perform search with filters
         let currentSort = 'name';
         
         function setSort(sortBy) {
@@ -2944,7 +2686,6 @@ try {
         function performSearch() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
-            // Get role filters
             const filterStudent = document.getElementById('filterStudent')?.checked || false;
             const filterTeacher = document.getElementById('filterTeacher')?.checked || false;
             const filterAdmin = document.getElementById('filterAdmin')?.checked || false;
@@ -2952,13 +2693,10 @@ try {
             const filterSuperAdmin = document.getElementById('filterSuperAdmin')?.checked || false;
             <?php endif; ?>
             
-            // Get grade and section filters
             const filterGrade = document.getElementById('filterGradeLevel').value;
             const filterSection = document.getElementById('filterSection').value;
             
-            // Filter users
             let filteredUsers = allUsers.filter(user => {
-                // Search term filter
                 const matchesSearch = searchTerm === '' || 
                     user.full_name?.toLowerCase().includes(searchTerm) ||
                     user.username?.toLowerCase().includes(searchTerm) ||
@@ -2966,7 +2704,6 @@ try {
                 
                 if (!matchesSearch) return false;
                 
-                // Role filter
                 const roleFilters = [];
                 if (filterStudent) roleFilters.push('student');
                 if (filterTeacher) roleFilters.push('teacher');
@@ -2976,33 +2713,22 @@ try {
                 <?php endif; ?>
                 
                 if (roleFilters.length > 0 && !roleFilters.includes(user.role)) return false;
-                
-                // Grade filter
                 if (filterGrade && user.grade_level !== filterGrade) return false;
-                
-                // Section filter
                 if (filterSection && user.section !== filterSection) return false;
                 
                 return true;
             });
             
-            // Sort users
             filteredUsers.sort((a, b) => {
                 switch(currentSort) {
-                    case 'name':
-                        return (a.full_name || '').localeCompare(b.full_name || '');
-                    case 'role':
-                        return (a.role || '').localeCompare(b.role || '');
-                    case 'grade':
-                        return (a.grade_level || '').localeCompare(b.grade_level || '');
-                    case 'date':
-                        return new Date(b.created_at) - new Date(a.created_at);
-                    default:
-                        return 0;
+                    case 'name': return (a.full_name || '').localeCompare(b.full_name || '');
+                    case 'role': return (a.role || '').localeCompare(b.role || '');
+                    case 'grade': return (a.grade_level || '').localeCompare(b.grade_level || '');
+                    case 'date': return new Date(b.created_at) - new Date(a.created_at);
+                    default: return 0;
                 }
             });
             
-            // Display results
             displaySearchResults(filteredUsers);
         }
 
@@ -3016,7 +2742,6 @@ try {
             
             let html = '';
             users.forEach(user => {
-                const roleClass = `role-badge-${user.role}`;
                 const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
                 let roleColor = user.role === 'admin' || user.role === 'super_admin' ? '#0a2d63' : (user.role === 'teacher' ? '#10b981' : '#6c757d');
                 
@@ -3038,7 +2763,6 @@ try {
             resultsDiv.innerHTML = html;
         }
 
-        // Load users for deletion
         function loadDeleteUserList() {
             const deleteList = document.getElementById('deleteUserList');
             const searchTerm = document.getElementById('deleteSearchInput')?.value.toLowerCase() || '';
@@ -3049,11 +2773,9 @@ try {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.users) {
-                        // Filter out current user and apply search
                         const currentUserId = <?php echo $userId; ?>;
                         let filteredUsers = data.users.filter(user => user.id != currentUserId);
                         
-                        // Apply search filter
                         if (searchTerm) {
                             filteredUsers = filteredUsers.filter(user => 
                                 user.full_name?.toLowerCase().includes(searchTerm) ||
@@ -3118,28 +2840,24 @@ try {
                 return;
             }
         
-            // Show loading state
             const deleteBtn = document.querySelector('#deleteUserModal .btn-delete');
             const originalText = deleteBtn.textContent;
             deleteBtn.textContent = 'Deleting...';
             deleteBtn.disabled = true;
         
-            // Delete users one by one
             let deletedCount = 0;
             let failedCount = 0;
         
             function deleteNextUser(index) {
                 if (index >= selectedIds.length) {
-                    // All done
                     deleteBtn.textContent = originalText;
                     deleteBtn.disabled = false;
                     
                     if (deletedCount > 0) {
                         alert(`Successfully deleted ${deletedCount} user(s). ${failedCount > 0 ? failedCount + ' failed.' : ''}`);
                         closeDeleteUserModal();
-                        loadUsers(); // Refresh user list
                         if (typeof loadDeleteUserList === 'function') {
-                            loadDeleteUserList(); // Refresh delete modal list
+                            loadDeleteUserList();
                         }
                     } else {
                         alert('No users were deleted.');
@@ -3158,7 +2876,7 @@ try {
                     if (!response.ok) {
                         throw new Error('Network response was not ok');
                     }
-                    return response.text(); // Get as text first to debug
+                    return response.text();
                 })
                 .then(text => {
                     try {
@@ -3173,7 +2891,6 @@ try {
                         console.error('Invalid JSON response:', text);
                         failedCount++;
                     }
-                    // Delete next user
                     deleteNextUser(index + 1);
                 })
                 .catch(error => {
@@ -3183,19 +2900,15 @@ try {
                 });
             }
             
-            // Start deleting from first user
             deleteNextUser(0);
         }
 
-        // Other admin helper functions
         function updateStatus(enrollmentId, status) {
             const statusText = status === 'approved' ? 'accept' : status === 'rejected' ? 'reject' : 'request documents';
             if (confirm(`Are you sure you want to ${statusText} this enrollment?`)) {
                 fetch('php/update_enrollment_status.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: `enrollment_id=${enrollmentId}&status=${status}`
                 })
                 .then(response => response.json())
@@ -3218,9 +2931,7 @@ try {
             if (confirm(`Are you sure you want to delete the enrollment for ${studentName}? This action cannot be undone.`)) {
                 fetch('php/delete_enrollment.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: `enrollment_id=${enrollmentId}`
                 })
                 .then(response => response.json())
@@ -3239,14 +2950,18 @@ try {
             }
         }
 
-        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
             loadEnrollments();
             setInterval(loadEnrollments, 30000);
             <?php endif; ?>
             
-            // Close modals when clicking outside
+            <?php if ($userRole == 'student'): ?>
+            if (document.getElementById('homeCard').classList.contains('active')) {
+                renderStudentChart();
+            }
+            <?php endif; ?>
+            
             window.onclick = function(event) {
                 const addModal = document.getElementById('addUserModal');
                 const searchModal = document.getElementById('searchUserModal');
@@ -3254,25 +2969,14 @@ try {
                 const documentModal = document.getElementById('documentModal');
                 const enrollmentSearchModal = document.getElementById('enrollmentSearchModal');
                 
-                if (event.target === addModal) {
-                    closeAddUserModal();
-                }
-                if (event.target === searchModal) {
-                    closeSearchModal();
-                }
-                if (event.target === deleteModal) {
-                    closeDeleteUserModal();
-                }
-                if (event.target === documentModal) {
-                    closeDocumentModal();
-                }
-                if (event.target === enrollmentSearchModal) {
-                    closeEnrollmentSearchModal();
-                }
+                if (event.target === addModal) closeAddUserModal();
+                if (event.target === searchModal) closeSearchModal();
+                if (event.target === deleteModal) closeDeleteUserModal();
+                if (event.target === documentModal) closeDocumentModal();
+                if (event.target === enrollmentSearchModal) closeEnrollmentSearchModal();
             }
         });
 
-        // Generate PDF function
         function generatePDF(enrollmentId) {
             window.open('php/enrollment_pdf.php?enrollment_id=' + enrollmentId, '_blank');
         }
