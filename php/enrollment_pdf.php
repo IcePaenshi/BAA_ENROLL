@@ -103,9 +103,10 @@ $enrollmentId = intval($_GET['enrollment_id']);
 try {
     // Fetch enrollment data
     $stmt = $pdo->prepare("
-        SELECT e.*, 
-               DATE_FORMAT(e.created_at, '%M %d, %Y %h:%i %p') as formatted_date,
-               DATE_FORMAT(e.birthdate, '%M %d, %Y') as formatted_birthdate
+        SELECT e.*,
+           CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name, e.suffix) AS full_name,
+           DATE_FORMAT(e.created_at, '%M %d, %Y %h:%i %p') as formatted_date,
+           DATE_FORMAT(e.birthdate, '%M %d, %Y') as formatted_birthdate
         FROM enrollments e
         WHERE e.id = ?
     ");

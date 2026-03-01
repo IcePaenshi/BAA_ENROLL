@@ -33,18 +33,31 @@ if (!in_array($userRole, $allowedRoles)) {
 $username = trim($_POST['username'] ?? '');
 $email = trim($_POST['email'] ?? '');
 $password = $_POST['password'] ?? '';
-$fullName = trim($_POST['fullName'] ?? '');
+$firstName = trim($_POST['first_name'] ?? '');
+$middleName = trim($_POST['middle_name'] ?? '');
+$lastName = trim($_POST['last_name'] ?? '');
+$suffix = trim($_POST['suffix'] ?? '');
 $role = $_POST['role'] ?? '';
 $gradeLevel = trim($_POST['gradeLevel'] ?? '');
 $section = trim($_POST['section'] ?? '');
 $lrn = trim($_POST['lrn'] ?? '');
 
-// Enrollment fields
+// Enrollment fields (still needed for validation)
 $age = trim($_POST['age'] ?? '');
 $gender = trim($_POST['gender'] ?? '');
 $birthdate = trim($_POST['birthdate'] ?? '');
 $strand = trim($_POST['strand'] ?? '');
 $phone = trim($_POST['phone'] ?? '');
+
+// Enrollment ID (if coming from Accept)
+$enrollmentId = $_POST['enrollment_id'] ?? null;
+
+// Build full name for display (not stored separately)
+$fullNameParts = [$firstName];
+if (!empty($middleName)) $fullNameParts[] = $middleName;
+if (!empty($lastName)) $fullNameParts[] = $lastName;
+if (!empty($suffix)) $fullNameParts[] = $suffix;
+$fullName = implode(' ', $fullNameParts);
 
 // Validation
 $errors = [];
@@ -61,8 +74,8 @@ if (empty($password)) {
     $errors[] = 'Password is required';
 }
 
-if (empty($fullName)) {
-    $errors[] = 'Full name is required';
+if (empty($firstName) || empty($lastName)) {
+    $errors[] = 'First name and last name are required';
 }
 
 $validRoles = ['student', 'teacher'];
@@ -78,7 +91,6 @@ if (empty($role) || !in_array($role, $validRoles)) {
 if ($role == 'student') {
     $validGrades = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
     
-    // Grade-section mapping
     $gradeSections = [
         'Grade 7' => ['Love', 'Joy'],
         'Grade 8' => ['Patience', 'Peace'],
@@ -136,6 +148,7 @@ if ($role == 'student') {
         $strand = null;
     }
 } else {
+    // Not a student – clear student-specific fields
     $gradeLevel = null;
     $section = null;
     $lrn = null;
@@ -165,50 +178,45 @@ try {
     // Hash password
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-    // Insert user
+    // Generate a unique student_id for students (optional)
+    $studentIdValue = null; // default NULL
+    if ($role == 'student') {
+        if ($enrollmentId) {
+            // Use enrollment ID to create a unique student ID (e.g., ENR-123)
+            $studentIdValue = 'ENR-' . $enrollmentId;
+        } else {
+            // If manually adding a student without an enrollment, you could generate a different unique ID
+            // For now, leave NULL (allowed after table alteration)
+            $studentIdValue = null;
+        }
+    }
+
+    // Insert user into users table using separate name fields
     $stmt = $pdo->prepare("
-        INSERT INTO users (username, email, password, full_name, role, grade_level, section, lrn)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users 
+        (username, email, password, first_name, middle_name, last_name, suffix, role, grade_level, section, lrn, student_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
     $stmt->execute([
         $username,
         $email,
         $hashedPassword,
-        $fullName,
+        $firstName,
+        $middleName,
+        $lastName,
+        $suffix,
         $role,
         $gradeLevel,
         $section,
-        $lrn
+        $lrn,
+        $studentIdValue
     ]);
 
     $userId = $pdo->lastInsertId();
 
-    // If role is student, also create an enrollment record
-    if ($role == 'student') {
-        // Format phone with +63 prefix
-        $fullPhone = '+63' . $phone;
-
-        // Insert into enrollments table
-        $enrollStmt = $pdo->prepare("
-            INSERT INTO enrollments 
-            (student_id, full_name, email, phone, age, gender, birthdate, grade_level, strand, section, lrn, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', NOW())
-        ");
-        $enrollStmt->execute([
-            $userId,
-            $fullName,
-            $email,
-            $fullPhone,
-            $age,
-            $gender,
-            $birthdate,
-            $gradeLevel,
-            $strand,
-            $section,
-            $lrn
-        ]);
-    }
+    // Do NOT insert into enrollments here – the enrollment already exists.
+    // It will be updated separately via update_enrollment_after_accept.php
 
     ob_end_clean();
     echo json_encode([

@@ -13,16 +13,21 @@ try {
     // Get all enrollments with their documents
     $stmt = $pdo->prepare("
         SELECT 
-            e.id,
-            e.full_name,
-            e.age,
-            e.gender,
-            e.birthdate,
-            e.email,
-            e.phone,
-            e.status,
-            e.created_at,
-            COUNT(ed.id) as document_count
+        e.id,
+        CONCAT_WS(' ', 
+            e.first_name, 
+            e.middle_name, 
+            e.last_name, 
+            e.suffix
+        ) AS full_name,
+        e.age,
+        e.gender,
+        e.birthdate,
+        e.email,
+        e.phone,
+        e.status,
+        e.created_at,
+        COUNT(ed.id) as document_count
         FROM enrollments e
         LEFT JOIN enrollment_documents ed ON e.id = ed.enrollment_id
         GROUP BY e.id

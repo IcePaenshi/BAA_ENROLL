@@ -2,7 +2,7 @@
 session_start();
 require_once 'db.php';
 
-// Check if user is admin or super_admin
+// Check permissions
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
@@ -10,22 +10,21 @@ if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'supe
 }
 
 try {
-    // Get all users
-    $stmt = $pdo->prepare("
-        SELECT
+    // Fetch all users, constructing full_name from separate fields
+    $stmt = $pdo->query("
+        SELECT 
             id,
             username,
             email,
-            full_name,
             role,
             grade_level,
             section,
             lrn,
-            created_at
+            created_at,
+            CONCAT_WS(' ', first_name, middle_name, last_name, suffix) AS full_name
         FROM users
         ORDER BY created_at DESC
     ");
-    $stmt->execute();
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     header('Content-Type: application/json');
@@ -33,11 +32,9 @@ try {
         'success' => true,
         'users' => $users
     ]);
+
 } catch(PDOException $e) {
     header('Content-Type: application/json');
-    echo json_encode([
-        'success' => false,
-        'message' => 'Database error: ' . $e->getMessage()
-    ]);
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
 }
 ?>

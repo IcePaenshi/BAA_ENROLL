@@ -1,22 +1,33 @@
 <?php
 session_start();
 require_once 'db.php';
-header('Content-Type: application/json');
 
+// Check permissions
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
 }
 
-$enrollmentId = isset($_POST['enrollment_id']) ? intval($_POST['enrollment_id']) : 0;
-$userId = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+$enrollmentId = $_POST['enrollment_id'] ?? '';
+$userId = $_POST['user_id'] ?? '';
 
 if (!$enrollmentId || !$userId) {
+    header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Missing parameters']);
     exit();
 }
 
-$stmt = $pdo->prepare("UPDATE enrollments SET student_id = ?, status = 'approved', updated_at = NOW() WHERE id = ?");
-$stmt->execute([$userId, $enrollmentId]);
+try {
+    // Update the enrollment status to 'approved'
+    $stmt = $pdo->prepare("UPDATE enrollments SET status = 'approved' WHERE id = ?");
+    $stmt->execute([$enrollmentId]);
 
-echo json_encode(['success' => true]);
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true]);
+
+} catch(PDOException $e) {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+}
+?>

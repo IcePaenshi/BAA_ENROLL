@@ -147,15 +147,34 @@ try {
     $events = [];
 }
 
-// Get total enrollment count
-$totalEnrollments = 0;
+// ADMIN STATS 
 if (in_array($userRole, ['admin', 'super_admin'])) {
     try {
-        $countStmt = $pdo->query("SELECT COUNT(*) FROM enrollments");
-        $totalEnrollments = $countStmt->fetchColumn();
-    } catch (PDOException $e) {
-        error_log("Error counting enrollments: " . $e->getMessage());
-    }
+    // Grades 7-10
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role = 'student' AND grade_level IN ('Grade 7','Grade 8','Grade 9','Grade 10')");
+    $stmt->execute();
+    $grades7to10 = $stmt->fetchColumn();
+
+    // Grades 11-12
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role = 'student' AND grade_level IN ('Grade 11','Grade 12')");
+    $stmt->execute();
+    $grades11to12 = $stmt->fetchColumn();
+
+    // New Requests (still from enrollments, pending)
+    $stmt = $pdo->query("SELECT COUNT(*) FROM enrollments WHERE status = 'pending'");
+    $newRequests = $stmt->fetchColumn();
+} catch (PDOException $e) {
+    error_log("Error fetching stats: " . $e->getMessage());
+    $newRequests = $grades7to10 = $grades11to12 = 0;
+}
+    // Total enrollments count
+try {
+    $stmt = $pdo->query("SELECT COUNT(*) FROM enrollments");
+    $totalEnrollments = $stmt->fetchColumn();
+} catch (PDOException $e) {
+    error_log("Error counting enrollments: " . $e->getMessage());
+    $totalEnrollments = 0;
+}
 }
 ?>
 <!DOCTYPE html>
@@ -166,6 +185,8 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
     <title>Baesa Adventist Academy - Dashboard</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         /* Custom animations and overrides */
         @keyframes slideIn {
@@ -195,26 +216,82 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         .dashboard-card.active {
             display: flex !important;
         }
-        /* Sidebar transitions */
+        /* Permanent sidebar */
         .sidebar {
-            transition: left 0.3s ease;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 300px;
+            height: 100vh;
+            background: #0a2d63;
+            color: white;
+            z-index: 1000;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
         }
-        .sidebar.open {
-            left: 0 !important;
+        .dashboard-main {
+            margin-left: 300px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
-        .sidebar-overlay.active {
-            display: block !important;
+        /* No overlay needed */
+        .sidebar-overlay {
+            display: none;
+        }
+        /* Stat cards */
+        .stat-card {
+            background: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            border: 1px solid #e5e7eb;
+        }
+        .stat-card h3 {
+            font-size: 0.875rem;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0a2d63;
+            margin-top: 0.25rem;
+        }
+        /* Chart container */
+        .chart-container {
+            background: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e5e7eb;
+            margin-bottom: 2rem;
+        }
+        .filter-select {
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            background: white;
+            font-size: 0.875rem;
         }
     </style>
+    <script>
+        // Fee structure per grade (Total Assessment)
+        const gradeFees = {
+            'Grade 7': 36102.50,
+            'Grade 8': 36723.23,
+            'Grade 9': 38226.05,
+            'Grade 10': 41587.03,
+            'Grade 11': 41827.50,
+            'Grade 12': 43677.50
+        };
+    </script>
 </head>
 <body class="bg-gray-100 font-sans <?php echo in_array($userRole, ['admin', 'super_admin']) ? 'admin-mode' : ''; ?>">
     <!-- Dashboard Page -->
     <div class="dashboard-page relative min-h-screen" id="dashboardPage">
-        <!-- Sidebar Overlay -->
-        <div class="sidebar-overlay fixed inset-0 bg-black bg-opacity-50 hidden z-[999]" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-        
-        <!-- Sidebar -->
-        <div class="sidebar fixed left-[-300px] top-0 w-[300px] h-screen bg-[#0a2d63] text-white z-[1000] shadow-lg" id="sidebar">
+        <!-- Permanent Sidebar (no toggle) -->
+        <div class="sidebar" id="sidebar">
             <div class="sidebar-header p-8 text-center bg-white bg-opacity-10 border-b border-white border-opacity-10">
                 <img src="images/logo.png" alt="BAA Logo" class="sidebar-logo w-[110px] h-[110px] mx-auto mb-5 object-contain">
                 <h3 class="text-xl font-semibold text-white">Baesa Adventist Academy</h3>
@@ -243,13 +320,11 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         
         <!-- Main Content -->
         <div class="dashboard-main flex flex-col min-h-screen">
-            <!-- Dashboard Header (fixed) -->
+            <!-- Dashboard Header (fixed) - removed menu button -->
             <div class="dashboard-header bg-[#0a2d63] text-white px-4 md:px-10 py-4 shadow-md w-full">
                 <div class="header-content flex items-center justify-between max-w-7xl mx-auto">
-                    <!-- Left section (menu button only) -->
-                    <div class="header-left flex items-center flex-1">
-                        <button class="menu-btn w-10 h-10 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-2xl rounded flex items-center justify-center transition" onclick="toggleSidebar()">☰</button>
-                    </div>
+                    <!-- Left section (empty now) -->
+                    <div class="header-left flex items-center flex-1"></div>
 
                     <!-- Center section (perfectly centered) -->
                     <div class="header-center text-center flex-1">
@@ -272,15 +347,57 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
 
             <!-- Dashboard Content - Centered Container -->
             <div class="dashboard-content flex justify-center items-start w-full p-5 min-h-[calc(100vh-120px)]">
-                <div class="centered-container w-full max-w-[1000px] mx-auto">
+                <div class="centered-container w-full max-w-[1200px] mx-auto">
                     <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
                         <!-- Admin Enrollments Dashboard -->
                         <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden <?php echo ($userRole == 'admin' || $userRole == 'super_admin') ? 'active' : ''; ?>" id="adminEnrollmentCard">
                             <div class="card-content p-8 space-y-6 w-full">
+                                <!-- Stats Cards -->
+                                <div class="stats-grid grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div class="stat-card">
+                                        <h3>New Requests</h3>
+                                        <div class="value"><?php echo $newRequests; ?></div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h3>Grades 7-10</h3>
+                                        <div class="value"><?php echo $grades7to10; ?></div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h3>Grades 11-12</h3>
+                                        <div class="value"><?php echo $grades11to12; ?></div>
+                                    </div>
+                                </div>
+
+                                <!-- Wave Graph with Filters -->
+                                <div class="chart-container">
+                                <div class="flex flex-wrap gap-4 mb-4">
+                                <!-- New: Data source selector -->
+                                    <select id="dataTypeFilter" class="filter-select" onchange="updateChart()">
+                                        <option value="enrollees">Enrollment Requests</option>
+                                        <option value="students">Registered Students</option>
+                                    </select>
+
+                                    <select id="chartGradeFilter" class="filter-select" onchange="updateChart()">
+                                        <option value="">All Grades</option>
+                                        <option value="Grade 7">Grade 7</option>
+                                        <option value="Grade 8">Grade 8</option>
+                                        <option value="Grade 9">Grade 9</option>
+                                        <option value="Grade 10">Grade 10</option>
+                                        <option value="Grade 11">Grade 11</option>
+                                        <option value="Grade 12">Grade 12</option>
+                                    </select>
+
+<select id="chartSectionFilter" class="filter-select" onchange="updateChart()">
+    <option value="">All Sections</option>
+            <!-- Sections will be populated dynamically based on grade (optional) -->
+        </select>
+    </div>
+    <canvas id="enrollmentChart" style="width:100%; max-height:300px;"></canvas>
+</div>
+
                                 <div class="enrollment-controls flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-gray-50 rounded">
                                     <div class="enrollment-stats flex flex-col md:flex-row items-center gap-4">
                                         <h3 class="text-2xl font-semibold text-[#0a2d63]">Student Access Requests</h3>
-                                        <span class="enrollment-count bg-[#0a2d63] text-white px-4 py-2 rounded font-semibold text-sm">Total Number of Enrolees: <?php echo $totalEnrollments; ?></span>
                                     </div>
                                     <button class="search-enrollment-btn bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition flex items-center gap-2" onclick="openEnrollmentSearchModal()">
                                         Search Enrollees
@@ -332,6 +449,9 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                         Delete User
                                     </button>
                                 </div>
+
+                                <!-- User List Container -->
+                                <div id="userList" class="mt-5"></div>
                             </div>
                         </div>
 
@@ -378,6 +498,11 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                 <div id="calculationResult" class="hidden p-5 bg-gray-50 border border-gray-200 rounded space-y-4">
                                     <h4 class="text-lg font-semibold text-[#0a2d63]">Calculation Result</h4>
                                     <div id="resultContent"></div>
+                                    <div class="text-center">
+                                        <button onclick="generateAssessmentPDF()" id="generatePdfBtn" class="hidden bg-blue-600 text-white px-5 py-2 rounded font-medium hover:bg-blue-700 transition">
+                                            Generate Assessment PDF
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="text-center">
@@ -487,8 +612,20 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                                             <input type="password" name="password" required class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#0a2d63] focus:ring-2 focus:ring-[#0a2d63] focus:ring-opacity-10">
                                         </div>
                                         <div class="form-group mb-4">
-                                            <label class="block mb-2 font-medium text-gray-700">Full Name *</label>
-                                            <input type="text" name="fullName" required class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#0a2d63] focus:ring-2 focus:ring-[#0a2d63] focus:ring-opacity-10">
+                                            <label class="block mb-2 font-medium text-gray-700">First Name *</label>
+                                            <input type="text" name="first_name" required class="w-full p-2 border border-gray-300 rounded">
+                                        </div>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Middle Name</label>
+                                            <input type="text" name="middle_name" class="w-full p-2 border border-gray-300 rounded">
+                                        </div>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Last Name *</label>
+                                            <input type="text" name="last_name" required class="w-full p-2 border border-gray-300 rounded">
+                                        </div>
+                                        <div class="form-group mb-4">
+                                            <label class="block mb-2 font-medium text-gray-700">Suffix</label>
+                                            <input type="text" name="suffix" class="w-full p-2 border border-gray-300 rounded">
                                         </div>
                                         <div class="form-group mb-4">
                                             <label class="block mb-2 font-medium text-gray-700">Role *</label>
@@ -1196,7 +1333,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                         
                         <!-- Announcements Card -->
                         <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="announcementsCard">
-                                <div class="card-content p-8 space-y-6 w-full"></div>
+                            <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Announcements</h3>
                                     <p class="text-gray-600">Latest school announcements and updates.</p>
@@ -1228,61 +1365,90 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         </div>
     </div>
 
-    <!-- Keep existing JavaScript (unchanged) -->
-    <script src="js/script.js"></script>
+    <!-- All JavaScript functions are included inline -->
     <script>
-        // JavaScript to update the clock every second (removed)
-        // (Clock has been removed from UI, but we can keep function if needed elsewhere)
-        
-        // Toggle between today's subjects and all subjects in Home Card
-        function toggleHomeSubjects() {
-            const todayList = document.getElementById('todaySubjectList');
-            const allList = document.getElementById('allSubjectList');
-            const viewAllBtn = document.querySelector('#homeCard .view-all-btn');
-            
-            if (todayList && allList && viewAllBtn) {
-                if (todayList.style.display === 'none' || todayList.style.display === '') {
-                    // Show today's subjects
-                    todayList.style.display = 'block';
-                    allList.style.display = 'none';
-                    viewAllBtn.textContent = 'View All Subjects';
-                    viewAllBtn.style.background = '#0a2d63';
-                } else {
-                    // Show all subjects
-                    todayList.style.display = 'none';
-                    allList.style.display = 'block';
-                    viewAllBtn.textContent = 'View Today\'s Subjects';
-                    viewAllBtn.style.background = '#10b981';
-                }
-            }
+        // CHART IMPLEMENTATION
+        let chartInstance = null;
+
+        function updateChart() {
+        const dataTypeEl = document.getElementById('dataTypeFilter');
+        const gradeEl = document.getElementById('chartGradeFilter');
+        const sectionEl = document.getElementById('chartSectionFilter');
+
+        if (!dataTypeEl || !gradeEl || !sectionEl) {
+            console.error('One or more filter elements are missing from the DOM.');
+            return;
         }
 
-        // Toggle between today's subjects and all subjects in Subjects Card
-        function toggleSubjectCard() {
-            const todayList = document.getElementById('todaySubjectsCardList');
-            const allList = document.getElementById('allSubjectsCardList');
-            const viewAllBtn = document.getElementById('subjectsCardBtn');
-            
-            if (todayList && allList && viewAllBtn) {
-                if (allList.style.display === 'none' || allList.style.display === '') {
-                    // Show all subjects
-                    todayList.style.display = 'none';
-                    allList.style.display = 'block';
-                    viewAllBtn.textContent = 'View Today\'s Subjects';
-                    viewAllBtn.style.background = '#0a2d63';
+        const dataType = dataTypeEl.value;
+        const grade = gradeEl.value;
+        const section = sectionEl.value;
+
+        let url = `php/get_enrollment_chart_data.php?data_type=${encodeURIComponent(dataType)}`;
+        if (grade) url += `&grade=${encodeURIComponent(grade)}`;
+        if (section) url += `&section=${encodeURIComponent(section)}`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderChart(data.labels, data.values);
                 } else {
-                    // Show today's subjects
-                    todayList.style.display = 'block';
-                    allList.style.display = 'none';
-                    viewAllBtn.textContent = 'View All Subjects';
-                    viewAllBtn.style.background = '#10b981';
+                    console.error('Chart data error:', data.message);
                 }
+            })
+            .catch(err => console.error('Error fetching chart data:', err));
+}
+
+        function renderChart(labels, values) {
+        const ctx = document.getElementById('enrollmentChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+
+        const dataTypeEl = document.getElementById('dataTypeFilter');
+        const label = dataTypeEl ? (dataTypeEl.value === 'students' ? 'Registered Students' : 'Enrollment Requests') : 'Count';
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: label,
+                    data: values,
+                    borderColor: '#0a2d63',
+                    backgroundColor: 'rgba(10,45,99,0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
             }
+        });
+    }
+
+        function populateSectionDropdown(sections) {
+            const select = document.getElementById('chartSectionFilter');
+            select.innerHTML = '<option value="">All Sections</option>';
+            sections.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s;
+                option.textContent = s;
+                select.appendChild(option);
+            });
         }
 
-        // Simple navigation for all users
+        // Load chart on page load for admin
+        document.addEventListener('DOMContentLoaded', function() {
+            <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
+            updateChart();
+            <?php endif; ?>
+        });
+
         function navigateTo(page) {
-            toggleSidebar();
+            // No sidebar toggle needed
             
             // Remove active class from all menu items
             const menuItems = document.querySelectorAll('.sidebar ul li a');
@@ -1366,6 +1532,52 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             document.getElementById('teacherCard').classList.add('active');
             
             <?php endif; ?>
+        }
+
+        // Toggle between today's subjects and all subjects in Home Card
+        function toggleHomeSubjects() {
+            const todayList = document.getElementById('todaySubjectList');
+            const allList = document.getElementById('allSubjectList');
+            const viewAllBtn = document.querySelector('#homeCard .view-all-btn');
+            
+            if (todayList && allList && viewAllBtn) {
+                if (todayList.style.display === 'none' || todayList.style.display === '') {
+                    // Show today's subjects
+                    todayList.style.display = 'block';
+                    allList.style.display = 'none';
+                    viewAllBtn.textContent = 'View All Subjects';
+                    viewAllBtn.style.background = '#0a2d63';
+                } else {
+                    // Show all subjects
+                    todayList.style.display = 'none';
+                    allList.style.display = 'block';
+                    viewAllBtn.textContent = 'View Today\'s Subjects';
+                    viewAllBtn.style.background = '#10b981';
+                }
+            }
+        }
+
+        // Toggle between today's subjects and all subjects in Subjects Card
+        function toggleSubjectCard() {
+            const todayList = document.getElementById('todaySubjectsCardList');
+            const allList = document.getElementById('allSubjectsCardList');
+            const viewAllBtn = document.getElementById('subjectsCardBtn');
+            
+            if (todayList && allList && viewAllBtn) {
+                if (allList.style.display === 'none' || allList.style.display === '') {
+                    // Show all subjects
+                    todayList.style.display = 'none';
+                    allList.style.display = 'block';
+                    viewAllBtn.textContent = 'View Today\'s Subjects';
+                    viewAllBtn.style.background = '#0a2d63';
+                } else {
+                    // Show today's subjects
+                    todayList.style.display = 'block';
+                    allList.style.display = 'none';
+                    viewAllBtn.textContent = 'View All Subjects';
+                    viewAllBtn.style.background = '#10b981';
+                }
+            }
         }
 
         // Load payables for student
@@ -1467,6 +1679,10 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         // Load and display all users
         function loadUsers() {
             const userList = document.getElementById('userList');
+            if (!userList) {
+                console.log('userList element not found');
+                return;
+            }
             userList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading users...</div>';
 
             fetch('php/get_users.php')
@@ -1544,10 +1760,12 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         }
 
         // Load enrollments for admin with pagination
+        <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
         let currentPage = 1;
         let perPage = 10;
         let totalEnrollments = <?php echo $totalEnrollments; ?>;
         let allEnrollments = [];
+        <?php endif; ?>
 
         function loadEnrollments(page = currentPage) {
             currentPage = page;
@@ -1745,13 +1963,18 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                 // Show strand container if grade is 11/12 (already handled by updateModalSections, but ensure it's visible)
                 const strandContainer = document.getElementById('modalStrandContainer');
                 if (strandContainer && (enrollee.grade_level === 'Grade 11' || enrollee.grade_level === 'Grade 12')) {
-                    strandContainer.classList.remove('hidden');
+            strandContainer.classList.remove('hidden');
                 }
             }
 
-            // Email and full name
+            // Set name fields from individual enrollment fields (no splitting needed!)
+            setFieldByName('first_name', enrollee.first_name || '');
+            setFieldByName('middle_name', enrollee.middle_name || '');
+            setFieldByName('last_name', enrollee.last_name || '');
+            setFieldByName('suffix', enrollee.suffix || '');
+
+            // Email
             setFieldByName('email', enrollee.email);
-            setFieldByName('fullName', enrollee.full_name);
 
             // Set default password
             const passwordField = document.querySelector('input[name="password"]');
@@ -2042,36 +2265,54 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
         }
 
         // Load students for Payables Management tab
+        let studentsData = [];
+
         function loadStudents() {
             const studentSelect = document.getElementById('studentSelect');
-            if (!studentSelect) {
-                console.log('studentSelect element not found - maybe not on payables management tab');
-                return;
-            }
-        
+            if (!studentSelect) return;
+
             studentSelect.innerHTML = '<option value="">Loading students...</option>';
-        
+
             fetch('php/get_users.php')
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Students data received:', data); // Debug log
                     if (data.success && data.users) {
+                        studentsData = data.users.filter(u => u.role === 'student');
                         let options = '<option value="">Select Student</option>';
-                        let studentCount = 0;
-                    
-                        data.users.forEach(user => {
-                            if (user.role === 'student') {
-                                studentCount++;
-                                const displayText = `${user.full_name}${user.grade_level ? ` (${user.grade_level}` : ''}${user.section ? ` - ${user.section}` : ''}${user.grade_level ? ')' : ''}`;
-                                options += `<option value="${user.id}">${displayText}</option>`;
+                        studentsData.forEach(s => {
+                            options += `<option value="${s.id}" data-grade="${s.grade_level}">${s.full_name} (${s.grade_level || ''})</option>`;
+                        });
+                        studentSelect.innerHTML = options;
+
+                        // Add change event listener
+                        studentSelect.addEventListener('change', function() {
+                            const selectedId = this.value;
+                            const student = studentsData.find(s => s.id == selectedId);
+                            const tuitionField = document.getElementById('tuitionFee');
+                            if (student && student.grade_level && gradeFees[student.grade_level]) {
+                                // Fetch breakdown from server
+                                fetch(`php/get_fee_breakdown.php?grade=${encodeURIComponent(student.grade_level)}`)
+                                    .then(res => res.json())
+                                    .then(data => {
+                                        if (data.success) {
+                                            tuitionField.value = data.breakdown.tuition.toFixed(2);
+                                            // Store breakdown in dataset for later use
+                                            const selectedOption = studentSelect.options[studentSelect.selectedIndex];
+                                            selectedOption.dataset.breakdown = JSON.stringify(data.breakdown);
+                                        } else {
+                                            tuitionField.value = gradeFees[student.grade_level].toFixed(2);
+                                        }
+                                    })
+                                    .catch(err => {
+                                        console.error('Error fetching fee breakdown:', err);
+                                        tuitionField.value = gradeFees[student.grade_level].toFixed(2);
+                                    });
+                            } else {
+                                tuitionField.value = '';
                             }
                         });
-                        
-                        studentSelect.innerHTML = options;
-                        console.log(`Loaded ${studentCount} students for payables management`);
                     } else {
                         studentSelect.innerHTML = '<option value="">No students found</option>';
-                        console.error('Failed to load users:', data.message);
                     }
                 })
                 .catch(error => {
@@ -2141,28 +2382,47 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const remainingBalance = totalPayable - downPayment;
             const monthlyPaymentAmount = remainingBalance / monthlyPayments;
             
+            // Get breakdown from dataset
+            const studentSelect = document.getElementById('studentSelect');
+            const selectedOption = studentSelect.options[studentSelect.selectedIndex];
+            let breakdown = {};
+            if (selectedOption && selectedOption.dataset.breakdown) {
+                breakdown = JSON.parse(selectedOption.dataset.breakdown);
+            } else {
+                breakdown = { tuition: tuitionFee, misc: 0, aircon: 0, hsa: 0, books: 0 };
+            }
+            
             // Display result
             const resultContent = document.getElementById('resultContent');
             const calculationResult = document.getElementById('calculationResult');
             const addPayableBtn = document.getElementById('addPayableBtn');
+            const generatePdfBtn = document.getElementById('generatePdfBtn');
             
             resultContent.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                     <div>
-                        <strong class="text-gray-700">Total Tuition Fee:</strong>
-                        <div class="text-lg text-[#0a2d63]">₱${tuitionFee.toFixed(2)}</div>
+                        <strong class="text-gray-700">Tuition Fee:</strong>
+                        <div class="text-lg text-[#0a2d63]">₱${breakdown.tuition.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <strong class="text-gray-700">Miscellaneous:</strong>
+                        <div class="text-lg text-[#0a2d63]">₱${breakdown.misc.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <strong class="text-gray-700">Aircon Fee:</strong>
+                        <div class="text-lg text-[#0a2d63]">₱${breakdown.aircon.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <strong class="text-gray-700">HSA Fee:</strong>
+                        <div class="text-lg text-[#0a2d63]">₱${breakdown.hsa.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <strong class="text-gray-700">Books:</strong>
+                        <div class="text-lg text-[#0a2d63]">₱${breakdown.books.toFixed(2)}</div>
                     </div>
                     <div>
                         <strong class="text-gray-700">Discounts/Grants:</strong>
                         <div class="text-lg text-green-600">₱${discounts.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <strong class="text-gray-700">Total Payable:</strong>
-                        <div class="text-lg text-[#0a2d63]">₱${totalPayable.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <strong class="text-gray-700">Down Payment:</strong>
-                        <div class="text-lg text-yellow-600">₱${downPayment.toFixed(2)}</div>
                     </div>
                 </div>
                 <div class="text-center p-4 bg-blue-50 rounded-lg my-4">
@@ -2177,17 +2437,64 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             
             calculationResult.style.display = 'block';
             addPayableBtn.style.display = 'inline-block';
+            generatePdfBtn.style.display = 'inline-block';
             
             // Store calculated values for later use
             window.calculatedPayables = {
                 studentId: studentId,
-                tuitionFee: tuitionFee,
+                tuitionFee: breakdown.tuition,
+                misc: breakdown.misc,
+                aircon: breakdown.aircon,
+                hsa: breakdown.hsa,
+                books: breakdown.books,
                 discounts: discounts,
                 downPayment: downPayment,
                 remainingBalance: remainingBalance,
                 monthlyPayments: monthlyPayments,
                 monthlyPaymentAmount: monthlyPaymentAmount
             };
+        }
+
+        // Generate Assessment PDF
+        function generateAssessmentPDF() {
+            if (!window.calculatedPayables) {
+                alert('No calculation data available. Please calculate first.');
+                return;
+            }
+            const data = window.calculatedPayables;
+
+            // Create a form to POST data
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'php/generate_assessment_pdf.php';
+            form.target = '_blank';
+
+            // Add all needed fields
+            const fields = {
+                student_id: data.studentId,
+                tuition: data.tuitionFee,
+                misc: data.misc || 0,
+                aircon: data.aircon || 0,
+                hsa: data.hsa || 0,
+                books: data.books || 0,
+                discounts: data.discounts,
+                downPayment: data.downPayment,
+                monthlyPayments: data.monthlyPayments,
+                monthlyPaymentAmount: data.monthlyPaymentAmount,
+                remainingBalance: data.remainingBalance
+            };
+
+            for (let key in fields) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         // Add payable to student
@@ -2230,6 +2537,7 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                     document.getElementById('payablesForm').reset();
                     document.getElementById('calculationResult').style.display = 'none';
                     document.getElementById('addPayableBtn').style.display = 'none';
+                    document.getElementById('generatePdfBtn').style.display = 'none';
                     window.calculatedPayables = null;
                 } else {
                     alert('Error adding payables: ' + data.message);
@@ -2522,7 +2830,26 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             const form = document.getElementById('createUserForm');
             const formData = new FormData(form);
 
-            // Basic validation (optional – the backend will also validate)
+            // Construct full_name from separate name fields
+            const firstName = formData.get('first_name') || '';
+            const middleName = formData.get('middle_name') || '';
+            const lastName = formData.get('last_name') || '';
+            const suffix = formData.get('suffix') || '';
+            const fullName = [firstName, middleName, lastName, suffix]
+                .filter(part => part.trim() !== '')
+                .join(' ');
+            formData.append('full_name', fullName);
+
+            // Ensure role is included (select may be disabled when coming from enrollment)
+            const roleSelect = document.getElementById('modalRoleSelect');
+            if (roleSelect) {
+                const role = roleSelect.value;
+                if (role && !formData.has('role')) {
+                    formData.append('role', role);
+                }
+            }
+
+            // Basic validation
             const username = formData.get('username')?.trim();
             if (!username) {
                 alert('Username is required');
@@ -2544,50 +2871,46 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
                 if (data.success) {
                     alert('User created successfully!');
 
-                    // If this creation came from accepting an enrollment, update that enrollment
-                    const enrollmentId = document.getElementById('modalEnrollmentId').value;
-                    if (enrollmentId) {
-                        // Send request to link enrollment to the new user and mark as approved
-                        fetch('php/update_enrollment_after_accept.php', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                            body: `enrollment_id=${enrollmentId}&user_id=${data.user_id}`
-                        })
-                        .then(res => res.json())
-                        .then(updateRes => {
-                            if (updateRes.success) {
-                                // Refresh enrollment list in admin dashboard
-                                if (typeof loadEnrollments === 'function') {
-                                    loadEnrollments();
-                                }
-                            } else {
-                                console.error('Failed to update enrollment:', updateRes.message);
-                            }
-                        })
-                        .catch(err => console.error('Error updating enrollment:', err));
+            // If this came from accepting an enrollment, update its status
+            const enrollmentId = document.getElementById('modalEnrollmentId').value;
+            if (enrollmentId) {
+                fetch('php/update_enrollment_after_accept.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `enrollment_id=${enrollmentId}&user_id=${data.user_id}`
+                })
+                .then(res => res.json())
+                .then(updateRes => {
+                    if (updateRes.success) {
+                        if (typeof loadEnrollments === 'function') {
+                            loadEnrollments();
+                        }
+                    } else {
+                        console.error('Failed to update enrollment:', updateRes.message);
                     }
+                })
+                .catch(err => console.error('Error updating enrollment:', err));
+            }
 
-                    // Close modal and reset
-                    closeAddUserModal();
+            closeAddUserModal();
 
-                    // Optionally refresh user list if on user management tab
-                    if (typeof loadUsers === 'function' && document.getElementById('usersCard')?.classList.contains('active')) {
-                        loadUsers();
-                    }
-                } else {
-                    alert('Error creating user: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error creating user:', error);
-                alert('Network error. Please try again.');
-            })
-            .finally(() => {
-                // Restore button state
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-            });
+            if (typeof loadUsers === 'function' && document.getElementById('usersCard')?.classList.contains('active')) {
+                loadUsers();
+            }
+        } else {
+            alert('Error creating user: ' + (data.message || 'Unknown error'));
         }
+    })
+    .catch(error => {
+        console.error('Error creating user:', error);
+        alert('Network error. Please try again.');
+    })
+    .finally(() => {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
 
         // Load all users for search
         let allUsers = [];
@@ -2949,18 +3272,12 @@ if (in_array($userRole, ['admin', 'super_admin'])) {
             }
         });
 
-        // Sidebar toggle
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            sidebar.classList.toggle('open');
-            overlay.classList.toggle('active');
-        }
-
         // Generate PDF function
         function generatePDF(enrollmentId) {
-            alert('PDF generation feature coming soon!');
+            window.open('php/enrollment_pdf.php?enrollment_id=' + enrollmentId, '_blank');
         }
+
+        function toggleSidebar() {}
     </script>
 </body>
 </html>

@@ -2,10 +2,16 @@
 session_start();
 header('Content-Type: application/json');
 require_once 'db.php';
-require_once '../fpdf/fpdf.php'; 
+require_once '../fpdf/fpdf.php';
 
 // Function to generate PDF receipt using FPDF
 function generatePDFReceipt($data, $enrollmentId) {
+    // Build full name from parts
+    $fullName = trim($data['first_name'] . ' ' . $data['middle_name'] . ' ' . $data['last_name']);
+    if (!empty($data['suffix'])) {
+        $fullName .= ', ' . $data['suffix'];
+    }
+
     // Create PDF
     $pdf = new FPDF('P', 'mm', 'A4');
     $pdf->AddPage();
@@ -65,7 +71,7 @@ function generatePDFReceipt($data, $enrollmentId) {
     $pdf->SetFont('Arial', '', 11);
     
     $fields = [
-        'Full Name' => $data['full_name'],
+        'Full Name' => $fullName,
         'Age' => $data['age'] . ' years old',
         'Gender' => $data['gender'],
         'Birthdate' => date('F j, Y', strtotime($data['birthdate'])),
@@ -135,12 +141,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-// Create enrollments table if not exists
+// Create enrollments table if not exists (updated to match your schema)
 try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS enrollments (
             id INT PRIMARY KEY AUTO_INCREMENT,
-            full_name VARCHAR(255) NOT NULL,
+            first_name VARCHAR(100) NOT NULL,
+            middle_name VARCHAR(100),
+            last_name VARCHAR(100) NOT NULL,
+            suffix VARCHAR(20),
             age INT NOT NULL,
             gender ENUM('Male', 'Female') NOT NULL,
             birthdate DATE NOT NULL,
@@ -176,20 +185,26 @@ try {
 }
 
 // Get form data with proper sanitization
-$fullName = trim($_POST['fullName'] ?? '');
-$age = trim($_POST['age'] ?? '');
-$gender = trim($_POST['gender'] ?? '');
-$birthdate = trim($_POST['birthdate'] ?? '');
-$email = trim($_POST['email'] ?? '');
-$phone = trim($_POST['phone'] ?? '');
-$grade = trim($_POST['grade'] ?? '');
-$strand = trim($_POST['strand'] ?? '');
+$firstName  = trim($_POST['firstName'] ?? '');
+$middleName = trim($_POST['middleName'] ?? '');
+$lastName   = trim($_POST['lastName'] ?? '');
+$suffix     = trim($_POST['suffix'] ?? '');
+$age        = trim($_POST['age'] ?? '');
+$gender     = trim($_POST['gender'] ?? '');
+$birthdate  = trim($_POST['birthdate'] ?? '');
+$email      = trim($_POST['email'] ?? '');
+$phone      = trim($_POST['phone'] ?? '');
+$grade      = trim($_POST['grade'] ?? '');
+$strand     = trim($_POST['strand'] ?? '');
 
 // Validation
 $errors = [];
 
-if (empty($fullName) || strlen($fullName) < 2) {
-    $errors[] = 'Full name is required (minimum 2 characters)';
+if (empty($firstName) || strlen($firstName) < 2) {
+    $errors[] = 'First name is required (minimum 2 characters)';
+}
+if (empty($lastName) || strlen($lastName) < 2) {
+    $errors[] = 'Last name is required (minimum 2 characters)';
 }
 
 if (empty($age) || !is_numeric($age) || $age < 1 || $age > 120) {
@@ -350,13 +365,17 @@ try {
     // Start transaction
     $pdo->beginTransaction();
     
-    // Insert enrollment record
+    // Insert enrollment record with the new columns
     $stmt = $pdo->prepare("
-        INSERT INTO enrollments (full_name, age, gender, birthdate, email, phone, grade_level, strand, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        INSERT INTO enrollments 
+        (first_name, middle_name, last_name, suffix, age, gender, birthdate, email, phone, grade_level, strand, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
     ");
     
-    $stmt->execute([$fullName, $age, $gender, $birthdate, $email, $phone, $grade, $strand]);
+    $stmt->execute([
+        $firstName, $middleName, $lastName, $suffix,
+        $age, $gender, $birthdate, $email, $phone, $grade, $strand
+    ]);
     $enrollmentId = $pdo->lastInsertId();
 
     // Insert documents
@@ -370,16 +389,19 @@ try {
         $docStmt->execute([$enrollmentId, $file['originalName'], $docPath, $file['size']]);
     }
 
-    // Generate PDF receipt
+    // Prepare data for PDF receipt
     $enrollmentData = [
-        'full_name' => $fullName,
-        'age' => $age,
-        'gender' => $gender,
-        'birthdate' => $birthdate,
+        'first_name'  => $firstName,
+        'middle_name' => $middleName,
+        'last_name'   => $lastName,
+        'suffix'      => $suffix,
+        'age'         => $age,
+        'gender'      => $gender,
+        'birthdate'   => $birthdate,
         'grade_level' => $grade,
-        'strand' => $strand,
-        'email' => $email,
-        'phone' => $phone
+        'strand'      => $strand,
+        'email'       => $email,
+        'phone'       => $phone
     ];
     
     $receiptPath = generatePDFReceipt($enrollmentData, $enrollmentId);
@@ -387,6 +409,12 @@ try {
     // Update enrollment with receipt path
     $updateStmt = $pdo->prepare("UPDATE enrollments SET receipt_path = ? WHERE id = ?");
     $updateStmt->execute([$receiptPath, $enrollmentId]);
+
+    // Build full name for email
+    $fullName = trim($firstName . ' ' . $middleName . ' ' . $lastName);
+    if (!empty($suffix)) {
+        $fullName .= ', ' . $suffix;
+    }
 
     // Send confirmation email
     try {

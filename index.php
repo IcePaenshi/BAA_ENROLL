@@ -909,7 +909,18 @@ if (isset($_SESSION['user_id'])) {
     
     <script src="js/script.js"></script>
     <script>
-        // Enrollment Form Handler
+        // ========== NAME CAPITALIZATION FEATURE ==========
+        function capitalizeFirstLetter(str) {
+            if (!str) return str;
+            return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+        }
+
+        function capitalizeNameField(e) {
+            const input = e.target;
+            input.value = capitalizeFirstLetter(input.value);
+        }
+
+        // ========== ENROLLMENT FORM HANDLER ==========
         document.addEventListener('DOMContentLoaded', function() {
             const fileUploadBox = document.getElementById('fileUploadBox');
             const fileInput = document.getElementById('enrollDocuments');
@@ -926,8 +937,19 @@ if (isset($_SESSION['user_id'])) {
             const agreeCheckbox = document.getElementById('agreeTerms');
             const proceedBtn = document.getElementById('proceedBtn');
 
-            if (!fileUploadBox || !fileInput || !enrollmentForm) {
-                return;
+            // ----- Name Capitalization (on blur) -----
+            const firstNameInput = document.getElementById('firstName');
+            const middleNameInput = document.getElementById('middleName');
+            const lastNameInput = document.getElementById('lastName');
+            
+            if (firstNameInput) {
+                firstNameInput.addEventListener('blur', capitalizeNameField);
+            }
+            if (middleNameInput) {
+                middleNameInput.addEventListener('blur', capitalizeNameField);
+            }
+            if (lastNameInput) {
+                lastNameInput.addEventListener('blur', capitalizeNameField);
             }
 
             // Enable proceed button when terms are agreed
@@ -937,7 +959,7 @@ if (isset($_SESSION['user_id'])) {
                 });
             }
 
-            // Populate days
+            // Populate days based on month/year
             function populateDays() {
                 const month = birthMonth.value;
                 const year = birthYear.value || new Date().getFullYear();
@@ -955,61 +977,86 @@ if (isset($_SESSION['user_id'])) {
             birthMonth.addEventListener('change', populateDays);
             birthYear.addEventListener('input', populateDays);
 
-            // Age guesser - Improved version with birthday logic
-            ageInput.addEventListener('input', function() {
-                const age = parseInt(this.value);
-                if (age && age > 0 && age < 120) {
-                    const today = new Date();
-                    const currentYear = today.getFullYear();
-                    const currentMonth = today.getMonth() + 1;
-                    const currentDay = today.getDate();
-                    
-                    const selectedMonth = parseInt(birthMonth.value);
-                    const selectedDay = parseInt(birthDay.value);
-                    
-                    let birthYearValue = currentYear - age;
-                    
-                    // If we have both month and day selected, check if birthday has passed this year
-                    if (selectedMonth && selectedDay) {
-                        // If birthday hasn't occurred yet this year, subtract one more year
-                        if (selectedMonth > currentMonth || (selectedMonth === currentMonth && selectedDay > currentDay)) {
-                            birthYearValue = currentYear - age - 1;
-                        }
-                    }
-                    
-                    birthYear.value = birthYearValue;
-                    populateDays();
-                }
-            });
+            // Helper: calculate birth year from age and selected month/day
+            function calculateYearFromAge(age, month, day) {
+                const today = new Date();
+                const currentYear = today.getFullYear();
+                const currentMonth = today.getMonth() + 1; // months are 0-indexed
+                const currentDay = today.getDate();
 
-            // Update age when birthdate is selected
-            function updateAgeFromBirthdate() {
-                const birthYearVal = parseInt(birthYear.value);
-                const birthMonthVal = parseInt(birthMonth.value);
-                const birthDayVal = parseInt(birthDay.value);
-                
-                if (birthYearVal && birthMonthVal && birthDayVal) {
-                    const today = new Date();
-                    const currentYear = today.getFullYear();
-                    const currentMonth = today.getMonth() + 1;
-                    const currentDay = today.getDate();
-                    
-                    let age = currentYear - birthYearVal;
-                    
-                    // Subtract 1 if birthday hasn't occurred yet this year
-                    if (birthMonthVal > currentMonth || (birthMonthVal === currentMonth && birthDayVal > currentDay)) {
-                        age--;
-                    }
-                    
-                    if (age > 0 && age < 120) {
-                        ageInput.value = age;
-                    }
+                if (!month || !day) {
+                    // No month/day selected → assume birthday already passed this year? Simpler: just subtract age.
+                    return currentYear - age;
+                }
+
+                const monthNum = parseInt(month);
+                const dayNum = parseInt(day);
+
+                // If birthday (month/day) is after today, the birthday hasn't occurred yet this year,
+                // so the age was reached last year.
+                if (monthNum > currentMonth || (monthNum === currentMonth && dayNum > currentDay)) {
+                    return currentYear - age - 1;
+                } else {
+                    return currentYear - age;
                 }
             }
 
-            birthMonth.addEventListener('change', updateAgeFromBirthdate);
-            birthDay.addEventListener('change', updateAgeFromBirthdate);
-            birthYear.addEventListener('input', updateAgeFromBirthdate);
+            // Helper: calculate age from full birthdate
+            function calculateAgeFromBirthdate(year, month, day) {
+                if (!year || !month || !day) return null;
+                const today = new Date();
+                const birthDate = new Date(year, month-1, day); // month is 0-indexed in JS
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const m = today.getMonth() - birthDate.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                return age;
+            }
+
+            // Age input: when user types age, compute and set birth year
+            ageInput.addEventListener('input', function() {
+                const age = parseInt(this.value);
+                if (age && age > 0 && age < 120) {
+                    const month = birthMonth.value;
+                    const day = birthDay.value;
+                    const year = calculateYearFromAge(age, month, day);
+                    birthYear.value = year;
+                    populateDays(); // in case month changed, days list updates
+                } else {
+                    // Clear year if age invalid
+                    birthYear.value = '';
+                }
+            });
+
+            // When month or day changes, adjust year to keep age constant (if age is set)
+            function handleMonthDayChange() {
+                const age = parseInt(ageInput.value);
+                if (age && age > 0 && age < 120) {
+                    const month = birthMonth.value;
+                    const day = birthDay.value;
+                    if (month && day) {
+                        const year = calculateYearFromAge(age, month, day);
+                        birthYear.value = year;
+                    }
+                } else {
+                    // If age is not set, calculate age from current birthdate
+                    const year = parseInt(birthYear.value);
+                    const month = birthMonth.value;
+                    const day = birthDay.value;
+                    if (year && month && day) {
+                        const newAge = calculateAgeFromBirthdate(year, month, day);
+                        if (newAge !== null) {
+                            ageInput.value = newAge;
+                        }
+                    }
+                }
+                populateDays(); // ensure days are correct
+            }
+
+            birthMonth.addEventListener('change', handleMonthDayChange);
+            birthDay.addEventListener('change', handleMonthDayChange);
+            // Year is readonly, so no need to listen for its change
 
             // Initialize file list
             if (fileList) {

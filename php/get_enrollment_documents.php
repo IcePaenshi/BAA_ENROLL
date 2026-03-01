@@ -20,7 +20,8 @@ if (!$enrollmentId) {
 try {
     // First get the enrollment info
     $enrollStmt = $pdo->prepare("
-        SELECT id, full_name 
+        SELECT id, 
+           CONCAT_WS(' ', first_name, middle_name, last_name, suffix) AS full_name
         FROM enrollments 
         WHERE id = ?
     ");
