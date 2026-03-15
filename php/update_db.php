@@ -2,22 +2,64 @@
 require_once 'db.php';
 
 try {
-    // Alter the users table to add super_admin to the role enum
-    $pdo->exec("ALTER TABLE users MODIFY COLUMN role ENUM('student', 'teacher', 'admin', 'super_admin') DEFAULT 'student'");
+    // Alter the users table to add name fields
+    $pdo->exec("ALTER TABLE users ADD COLUMN first_name VARCHAR(50) AFTER password");
+    $pdo->exec("ALTER TABLE users ADD COLUMN middle_name VARCHAR(50) AFTER first_name");
+    $pdo->exec("ALTER TABLE users ADD COLUMN last_name VARCHAR(50) AFTER middle_name");
+    $pdo->exec("ALTER TABLE users ADD COLUMN suffix VARCHAR(10) AFTER last_name");
     
-    echo "✅ Updated users table role enum<br>";
+    // Update the users table role enum
+    $pdo->exec("ALTER TABLE users MODIFY COLUMN role ENUM('student', 'teacher', 'cashier', 'registrar', 'admin') DEFAULT 'student'");
     
-    // Check if super_admin user exists
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = 'super_admin'");
+    echo "✅ Updated users table structure and role enum<br>";
+    
+    // Update existing super_admin to admin
+    $pdo->exec("UPDATE users SET role = 'admin' WHERE role = 'super_admin'");
+    echo "✅ Migrated super_admin to admin<br>";
+    
+    // Update existing users to split full_name into parts (simple split)
+    $pdo->exec("UPDATE users SET 
+        first_name = SUBSTRING_INDEX(full_name, ' ', 1),
+        last_name = SUBSTRING_INDEX(full_name, ' ', -1),
+        middle_name = CASE 
+            WHEN LENGTH(full_name) - LENGTH(REPLACE(full_name, ' ', '')) > 1 
+            THEN SUBSTRING_INDEX(SUBSTRING_INDEX(full_name, ' ', 2), ' ', -1)
+            ELSE ''
+        END
+        WHERE first_name IS NULL OR first_name = ''");
+    echo "✅ Split full_name into separate fields<br>";
+    
+    // Check if admin user exists (renamed from super_admin)
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = 'admin'");
     $stmt->execute();
     if (!$stmt->fetch()) {
-        // Create super_admin user
-        $password = password_hash('super123', PASSWORD_DEFAULT);
-        $stmt = $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute(['super_admin', 'superadmin@baa.edu', $password, 'Super Admin User', 'super_admin']);
-        echo "✅ Created super_admin user<br>";
+        // Create admin user
+        $password = password_hash('admin123', PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("INSERT INTO users (username, email, password, first_name, last_name, full_name, role) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute(['admin', 'admin@baa.edu', $password, 'Admin', 'User', 'Admin User', 'admin']);
+        echo "✅ Created admin user<br>";
     } else {
-        echo "✅ Super admin user already exists<br>";
+        echo "✅ Admin user already exists<br>";
+    }
+    
+    // Create cashier user if not exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = 'cashier'");
+    $stmt->execute();
+    if (!$stmt->fetch()) {
+        $password = password_hash('cashier123', PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("INSERT INTO users (username, email, password, first_name, last_name, full_name, role) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute(['cashier', 'cashier@baa.edu', $password, 'Cashier', 'User', 'Cashier User', 'cashier']);
+        echo "✅ Created cashier user<br>";
+    }
+    
+    // Create registrar user if not exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = 'registrar'");
+    $stmt->execute();
+    if (!$stmt->fetch()) {
+        $password = password_hash('registrar123', PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("INSERT INTO users (username, email, password, first_name, last_name, full_name, role) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute(['registrar', 'registrar@baa.edu', $password, 'Registrar', 'User', 'Registrar User', 'registrar']);
+        echo "✅ Created registrar user<br>";
     }
     
     // Create payables table if not exists

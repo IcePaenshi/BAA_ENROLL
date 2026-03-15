@@ -34,7 +34,9 @@ try {
             $user['last_name'] .
             (!empty($user['suffix']) ? ' ' . $user['suffix'] : ''));
         
-        if ($currentRole === 'admin' && in_array($user['role'], ['admin', 'super_admin'])) {
+        if ($currentRole === 'registrar' && !in_array($user['role'], ['student', 'teacher'])) {
+            $blockedUsers[] = $fullName . ' (' . $user['role'] . ')';
+        } elseif ($currentRole === 'admin' && $user['role'] === 'admin') {
             $blockedUsers[] = $fullName . ' (' . $user['role'] . ')';
         } else {
             $deletableIds[] = $user['id'];

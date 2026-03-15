@@ -16,6 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch();
         
         if ($user && password_verify($password, $user['password'])) {
+            // [MODIFIED] Check if account is active
+            if (isset($user['status']) && $user['status'] == 0) {
+                // Account is inactive
+                header('Location: ../index.php?error=inactive');
+                exit();
+            }
+
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['email'] = $user['email'] ?? '';

@@ -5,7 +5,7 @@ require_once 'db.php';
 header('Content-Type: application/json');
 
 // Check permissions
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'cashier'])) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
 }

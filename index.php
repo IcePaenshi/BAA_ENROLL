@@ -585,9 +585,22 @@ if (isset($_SESSION['user_id'])) {
                 <div class="login-form-container">
                     <h2>Welcome Back</h2>
 
-                    <div class="error-message" id="errorMessage" style="display: <?php echo isset($_GET['error']) ? 'block' : 'none'; ?>">
-                        Invalid username or password
+                    <?php
+                $error = isset($_GET['error']) ? $_GET['error'] : '';
+                $errorMsg = '';
+                if ($error == '1') {
+                    $errorMsg = 'Invalid username or password';
+                } elseif ($error == '2') {
+                    $errorMsg = 'Database error. Please try again later.';
+                } elseif ($error == 'inactive') {
+                    $errorMsg = 'Your account is inactive. Please contact the administrator.';
+                }
+                ?>
+                <?php if ($errorMsg): ?>
+                    <div class="error-message" id="errorMessage">
+                        <?php echo htmlspecialchars($errorMsg); ?>
                     </div>
+                <?php endif; ?>
 
                     <form method="POST" action="php/login.php">
                         <div class="input-group">

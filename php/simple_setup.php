@@ -11,8 +11,12 @@ try {
         username VARCHAR(50) UNIQUE,
         email VARCHAR(100) UNIQUE,
         password VARCHAR(255),
+        first_name VARCHAR(50),
+        middle_name VARCHAR(50),
+        last_name VARCHAR(50),
+        suffix VARCHAR(10),
         full_name VARCHAR(100),
-        role ENUM('student', 'teacher', 'admin', 'super_admin') DEFAULT 'student',
+        role ENUM('student', 'teacher', 'cashier', 'registrar', 'admin') DEFAULT 'student',
         grade_level VARCHAR(20),
         section VARCHAR(50),
         lrn VARCHAR(20),
@@ -32,6 +36,10 @@ $users = [
         'username' => 'student',
         'email' => 'student@baa.edu',
         'password' => password_hash('student123', PASSWORD_DEFAULT),
+        'first_name' => 'Student',
+        'middle_name' => '',
+        'last_name' => 'User',
+        'suffix' => '',
         'full_name' => 'Student User',
         'role' => 'student',
         'grade_level' => 'Grade 10',
@@ -42,6 +50,10 @@ $users = [
         'username' => 'teacher',
         'email' => 'teacher@baa.edu',
         'password' => password_hash('teacher123', PASSWORD_DEFAULT),
+        'first_name' => 'Teacher',
+        'middle_name' => '',
+        'last_name' => 'User',
+        'suffix' => '',
         'full_name' => 'Teacher User',
         'role' => 'teacher',
         'grade_level' => null,
@@ -52,6 +64,10 @@ $users = [
         'username' => 'admin',
         'email' => 'admin@baa.edu',
         'password' => password_hash('admin123', PASSWORD_DEFAULT),
+        'first_name' => 'Admin',
+        'middle_name' => '',
+        'last_name' => 'User',
+        'suffix' => '',
         'full_name' => 'Admin User',
         'role' => 'admin',
         'grade_level' => null,
@@ -59,11 +75,29 @@ $users = [
         'lrn' => null
     ],
     [
-        'username' => 'super_admin',
-        'email' => 'superadmin@baa.edu',
-        'password' => password_hash('super123', PASSWORD_DEFAULT),
-        'full_name' => 'Super Admin User',
-        'role' => 'super_admin',
+        'username' => 'cashier',
+        'email' => 'cashier@baa.edu',
+        'password' => password_hash('cashier123', PASSWORD_DEFAULT),
+        'first_name' => 'Cashier',
+        'middle_name' => '',
+        'last_name' => 'User',
+        'suffix' => '',
+        'full_name' => 'Cashier User',
+        'role' => 'cashier',
+        'grade_level' => null,
+        'section' => null,
+        'lrn' => null
+    ],
+    [
+        'username' => 'registrar',
+        'email' => 'registrar@baa.edu',
+        'password' => password_hash('registrar123', PASSWORD_DEFAULT),
+        'first_name' => 'Registrar',
+        'middle_name' => '',
+        'last_name' => 'User',
+        'suffix' => '',
+        'full_name' => 'Registrar User',
+        'role' => 'registrar',
         'grade_level' => null,
         'section' => null,
         'lrn' => null
@@ -71,8 +105,8 @@ $users = [
 ];
 
 $stmt = $pdo->prepare("
-    INSERT INTO users (username, email, password, full_name, role, grade_level, section, lrn) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (username, email, password, first_name, middle_name, last_name, suffix, full_name, role, grade_level, section, lrn) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ");
 
 foreach ($users as $user) {
@@ -81,6 +115,10 @@ foreach ($users as $user) {
             $user['username'],
             $user['email'],
             $user['password'],
+            $user['first_name'],
+            $user['middle_name'],
+            $user['last_name'],
+            $user['suffix'],
             $user['full_name'],
             $user['role'],
             $user['grade_level'],
@@ -100,7 +138,8 @@ echo "<tr><th>Username</th><th>Password</th><th>Role</th><th>Email</th></tr>";
 echo "<tr><td>student</td><td>student123</td><td>Student</td><td>student@baa.edu</td></tr>";
 echo "<tr><td>teacher</td><td>teacher123</td><td>Teacher</td><td>teacher@baa.edu</td></tr>";
 echo "<tr><td>admin</td><td>admin123</td><td>Admin</td><td>admin@baa.edu</td></tr>";
-echo "<tr><td>super_admin</td><td>super123</td><td>Super Admin</td><td>superadmin@baa.edu</td></tr>";
+echo "<tr><td>cashier</td><td>cashier123</td><td>Cashier</td><td>cashier@baa.edu</td></tr>";
+echo "<tr><td>registrar</td><td>registrar123</td><td>Registrar</td><td>registrar@baa.edu</td></tr>";
 echo "</table>";
 
 echo "<p><strong>Just use username and password to login!</strong></p>";

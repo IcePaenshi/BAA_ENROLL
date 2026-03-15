@@ -21,7 +21,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userRole = $_SESSION['role'];
-$allowedRoles = ['admin', 'super_admin'];
+$allowedRoles = ['admin', 'registrar'];
 
 if (!in_array($userRole, $allowedRoles)) {
     ob_end_clean();
@@ -79,8 +79,8 @@ if (empty($firstName) || empty($lastName)) {
 }
 
 $validRoles = ['student', 'teacher'];
-if ($userRole == 'super_admin') {
-    $validRoles[] = 'admin';
+if ($userRole == 'admin') {
+    $validRoles = ['student', 'teacher', 'cashier', 'registrar', 'admin'];
 }
 
 if (empty($role) || !in_array($role, $validRoles)) {
