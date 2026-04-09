@@ -903,7 +903,7 @@ if (isset($_SESSION['user_id'])) {
                     </div>
                     <div class="rotating-login-images">
                         <div class="login-image active">
-                            <img src="images/school1.jpg" alt="School Image 1">
+                            <img src="images/school_photo.png" alt="School Image 1">
                         </div>
                         <div class="login-image">
                             <img src="images/school2.jpg" alt="School Image 2">

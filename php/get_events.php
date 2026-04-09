@@ -1,6 +1,12 @@
 <?php
 header('Content-Type: application/json');
-require_once 'db.php';
+
+try {
+    require_once 'db.php';
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Database connection error']);
+    exit();
+}
 
 try {
     $stmt = $pdo->prepare("

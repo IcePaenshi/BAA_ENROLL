@@ -1,7 +1,13 @@
 <?php
 header('Content-Type: application/json');
 session_start();
-require_once 'db.php';
+
+try {
+    require_once 'db.php';
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Database connection error']);
+    exit();
+}
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'student') {
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);

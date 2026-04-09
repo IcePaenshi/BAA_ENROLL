@@ -1,9 +1,17 @@
 <?php
 session_start();
-require_once 'db.php';
+
+try {
+    require_once 'db.php';
+} catch (Exception $e) {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Database connection error']);
+    exit();
+}
 
 header('Content-Type: application/json');
 
+// Check if user is logged in
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'registrar'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);

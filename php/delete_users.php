@@ -3,7 +3,14 @@ ob_clean();
 ob_start();
 header('Content-Type: application/json');
 session_start();
-require_once 'db.php';
+
+try {
+    require_once 'db.php';
+} catch (Exception $e) {
+    ob_end_clean();
+    echo json_encode(['success' => false, 'message' => 'Database connection error']);
+    exit();
+}
 
 // ... (same permission checks) ...
 

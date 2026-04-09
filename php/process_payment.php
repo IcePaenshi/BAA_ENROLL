@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once 'db.php';
+header('Content-Type: application/json');
 
 // Check if user is admin or cashier
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'cashier'])) {
