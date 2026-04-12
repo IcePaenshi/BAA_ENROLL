@@ -115,6 +115,8 @@ function handleCreateUser() {
     $validRoles = ['student', 'teacher'];
     if ($userRole == 'admin') {
         $validRoles = ['student', 'teacher', 'cashier', 'registrar', 'admin'];
+    } elseif ($userRole == 'registrar') {
+        $validRoles = ['student'];
     }
 
     if (empty($role) || !in_array($role, $validRoles)) {
@@ -122,6 +124,7 @@ function handleCreateUser() {
     }
 
     // Role-specific validations
+    $computedAge = null;
     if ($role == 'student') {
         $validGrades = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
         
@@ -146,29 +149,28 @@ function handleCreateUser() {
             $errors[] = 'Invalid section for selected grade level';
         }
         
-        if (empty($lrn)) {
-            $errors[] = 'LRN is required for students';
-        }
-
-        // Enrollment field validations
-        if (empty($age) || !is_numeric($age) || $age < 1 || $age > 120) {
-            $errors[] = 'Valid age is required';
-        }
+        // LRN is optional for students
 
         if (empty($gender) || !in_array($gender, ['Male', 'Female'])) {
             $errors[] = 'Gender is required';
         }
 
+        $computedAge = null;
         if (empty($birthdate)) {
             $errors[] = 'Birthdate is required';
         } else {
             $date = DateTime::createFromFormat('Y-m-d', $birthdate);
             if (!$date || $date->format('Y-m-d') !== $birthdate) {
                 $errors[] = 'Invalid birthdate format';
+            } else {
+                $computedAge = baa_age_from_birthdate_years($birthdate);
+                if ($computedAge === null || $computedAge < 1 || $computedAge > 120) {
+                    $errors[] = 'Invalid birthdate or age out of range';
+                }
             }
         }
 
-        // Phone: must be exactly 10 digits
+        // Phone: must be exactly 10 digits (national mobile without +63)
         if (empty($phone) || !preg_match('/^[0-9]{10}$/', $phone)) {
             $errors[] = 'Valid phone number (10 digits) is required';
         }
@@ -183,14 +185,34 @@ function handleCreateUser() {
         }
     } else {
         // Not a student – clear student-specific fields
-        $gradeLevel = null;
-        $section = null;
-        $lrn = null;
-        $age = null;
-        $gender = null;
-        $birthdate = null;
+        $gradeLevel = '';
+        $section = '';
+        $lrn = '';
         $strand = null;
-        $phone = null;
+        // Age, gender, birthdate, and phone are now required for all users
+        if (empty($gender) || !in_array($gender, ['Male', 'Female'])) {
+            $errors[] = 'Gender is required';
+        }
+
+        $computedAge = null;
+        if (empty($birthdate)) {
+            $errors[] = 'Birthdate is required';
+        } else {
+            $date = DateTime::createFromFormat('Y-m-d', $birthdate);
+            if (!$date || $date->format('Y-m-d') !== $birthdate) {
+                $errors[] = 'Invalid birthdate format';
+            } else {
+                $computedAge = baa_age_from_birthdate_years($birthdate);
+                if ($computedAge === null || $computedAge < 1 || $computedAge > 120) {
+                    $errors[] = 'Invalid birthdate or age out of range';
+                }
+            }
+        }
+
+        // Phone: must be exactly 10 digits (national mobile without +63)
+        if (empty($phone) || !preg_match('/^[0-9]{10}$/', $phone)) {
+            $errors[] = 'Valid phone number (10 digits) is required';
+        }
     }
 
     if (!empty($errors)) {
@@ -198,6 +220,14 @@ function handleCreateUser() {
         echo json_encode(['success' => false, 'message' => implode(', ', $errors)]);
         exit();
     }
+
+    if ($role === 'student') {
+        $lrn = ($lrn === '' || $lrn === null) ? '' : $lrn;
+        $age = $computedAge;
+    }
+
+    // Format phone number for all users
+    $phone = '+63' . preg_replace('/\D/', '', $phone);
 
     try {
         // Check if username or email already exists
@@ -228,8 +258,8 @@ function handleCreateUser() {
         // Insert user into users table using separate name fields
         $stmt = $pdo->prepare("
             INSERT INTO users 
-            (username, email, password, first_name, middle_name, last_name, suffix, role, grade_level, section, lrn, student_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (username, email, password, first_name, middle_name, last_name, suffix, role, grade_level, section, lrn, student_id, age, gender, birthdate, phone, strand)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
         $stmt->execute([
@@ -244,7 +274,12 @@ function handleCreateUser() {
             $gradeLevel,
             $section,
             $lrn,
-            $studentIdValue
+            $studentIdValue,
+            (int) $computedAge,
+            $gender,
+            $birthdate,
+            '+63' . preg_replace('/\D/', '', $phone),
+            $strand,
         ]);
 
         $userId = $pdo->lastInsertId();
@@ -375,5 +410,23 @@ function handleUpdateTeacherSubjects() {
         ob_end_clean();
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
+}
+
+/**
+ * Calendar age from Y-m-d (same idea as public enrollment form).
+ */
+function baa_age_from_birthdate_years(string $ymd): ?int
+{
+    $d = DateTime::createFromFormat('Y-m-d', $ymd);
+    if (!$d || $d->format('Y-m-d') !== $ymd) {
+        return null;
+    }
+    $today = new DateTime('today');
+    $age = (int) $today->format('Y') - (int) $d->format('Y');
+    if ($today->format('md') < $d->format('md')) {
+        $age--;
+    }
+
+    return $age;
 }
 ?>

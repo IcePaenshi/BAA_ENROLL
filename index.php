@@ -82,6 +82,56 @@ if (isset($_SESSION['user_id'])) {
             text-align: center;
         }
 
+        /* 3-Way Toggle Switch Styles */
+        .student-type-toggle-container {
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .student-type-toggle {
+            display: flex;
+            background: #f1f5f9;
+            border-radius: 30px;
+            padding: 5px;
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .student-type-toggle input {
+            display: none;
+        }
+
+        .student-type-toggle label {
+            flex: 1;
+            padding: 12px 0;
+            text-align: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            z-index: 1;
+            transition: color 0.3s;
+            position: relative;
+        }
+
+        .student-type-toggle input:checked + label {
+            color: white;
+        }
+
+        .toggle-highlight {
+            position: absolute;
+            background: #0a2d63;
+            border-radius: 25px;
+            transition: left 0.3s ease-out;
+            top: 5px;
+            bottom: 5px;
+            width: calc(33.33% - 3.33px);
+            left: 5px;
+            z-index: 0;
+        }
+
         /* Terms Overlay */
         .terms-overlay {
             position: absolute;
@@ -534,8 +584,18 @@ if (isset($_SESSION['user_id'])) {
             .back-btn, .submit-btn {
                 width: 100%;
             }
+
+            .student-type-toggle label {
+                font-size: 12px;
+                padding: 10px 0;
+            }
+        }
+
+        .enrollment-recaptcha-wrap {
+            margin: 16px 0 8px;
         }
     </style>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 </head>
 <body>
     <!-- Landing Page -->
@@ -754,6 +814,19 @@ if (isset($_SESSION['user_id'])) {
                     <form id="enrollmentForm" style="display: none;">
                         <h2>Student Enrollment Form</h2>
 
+                        <!-- 3-Way Toggle Switch for Student Type -->
+                        <div class="student-type-toggle-container">
+                            <div class="student-type-toggle">
+                                <input type="radio" name="studentType" id="newStudent" value="New Student" checked>
+                                <label for="newStudent">New Student</label>
+                                <input type="radio" name="studentType" id="oldStudent" value="Old Student">
+                                <label for="oldStudent">Old Student</label>
+                                <input type="radio" name="studentType" id="transferee" value="Transferee">
+                                <label for="transferee">Transferee</label>
+                                <div class="toggle-highlight"></div>
+                            </div>
+                        </div>
+
                         <!-- First Name -->
                         <div class="enroll-input-group">
                             <label for="firstName">First Name *</label>
@@ -787,13 +860,7 @@ if (isset($_SESSION['user_id'])) {
                             </select>
                         </div>
 
-                        <!-- Age -->
-                        <div class="enroll-input-group">
-                            <label for="age">Age *</label>
-                            <input type="number" id="age" name="age" min="1" max="120" required placeholder="Enter your age">
-                        </div>
-
-                        <!-- Gender -->
+                        <!-- Gender (moved before Birthdate) -->
                         <div class="enroll-input-group">
                             <label for="gender">Gender *</label>
                             <select id="gender" name="gender" required>
@@ -803,7 +870,7 @@ if (isset($_SESSION['user_id'])) {
                             </select>
                         </div>
 
-                        <!-- Birthdate -->
+                        <!-- Birthdate (moved before Age) -->
                         <div class="enroll-input-group">
                             <label>Birthdate *</label>
                             <div class="birthdate-group" style="display: flex; gap: 10px;">
@@ -825,8 +892,14 @@ if (isset($_SESSION['user_id'])) {
                                 <select id="birthDay" name="birthDay" required style="flex: 1;">
                                     <option value="">Day</option>
                                 </select>
-                                <input type="number" id="birthYear" name="birthYear" placeholder="Year" required readonly style="flex: 1; background: #f8f9fa;">
+                                <input type="number" id="birthYear" name="birthYear" placeholder="Year" required style="flex: 1;" min="1900" max="2100">
                             </div>
+                        </div>
+
+                        <!-- Age (now readonly, calculated from birthdate) -->
+                        <div class="enroll-input-group">
+                            <label for="age">Age *</label>
+                            <input type="number" id="age" name="age" min="1" max="120" required placeholder="Calculated from birthdate" readonly style="background: #f8f9fa;">
                         </div>
 
                         <!-- Grade Level -->
@@ -878,6 +951,10 @@ if (isset($_SESSION['user_id'])) {
                                 <input type="file" id="enrollDocuments" name="documents" multiple accept=".pdf,.jpg,.jpeg,.png" required>
                             </div>
                             <div class="file-list" id="fileList"></div>
+                        </div>
+
+                        <div class="enrollment-recaptcha-wrap">
+                            <div class="g-recaptcha" data-sitekey="6LfPGrAsAAAAAFfJ2uvzo9hCORgMlxH8Ju8zsO41"></div>
                         </div>
 
                         <div class="button-group">
@@ -933,6 +1010,28 @@ if (isset($_SESSION['user_id'])) {
             input.value = capitalizeFirstLetter(input.value);
         }
 
+        // ========== TOGGLE SWITCH FUNCTIONALITY ==========
+        function updateToggleHighlight() {
+            const toggle = document.querySelector('.student-type-toggle');
+            const highlight = document.querySelector('.toggle-highlight');
+            const newStudent = document.getElementById('newStudent');
+            const oldStudent = document.getElementById('oldStudent');
+            const transferee = document.getElementById('transferee');
+            
+            if (!toggle || !highlight) return;
+            
+            const toggleWidth = toggle.offsetWidth;
+            const optionWidth = (toggleWidth - 10) / 3; // Account for padding
+            
+            if (newStudent && newStudent.checked) {
+                highlight.style.left = '5px';
+            } else if (oldStudent && oldStudent.checked) {
+                highlight.style.left = (optionWidth + 5) + 'px';
+            } else if (transferee && transferee.checked) {
+                highlight.style.left = (optionWidth * 2 + 5) + 'px';
+            }
+        }
+
         // ========== ENROLLMENT FORM HANDLER ==========
         document.addEventListener('DOMContentLoaded', function() {
             const fileUploadBox = document.getElementById('fileUploadBox');
@@ -949,6 +1048,18 @@ if (isset($_SESSION['user_id'])) {
             const birthYear = document.getElementById('birthYear');
             const agreeCheckbox = document.getElementById('agreeTerms');
             const proceedBtn = document.getElementById('proceedBtn');
+
+            // ----- Toggle Switch Event Listeners -----
+            const studentTypeRadios = document.querySelectorAll('input[name="studentType"]');
+            studentTypeRadios.forEach(radio => {
+                radio.addEventListener('change', updateToggleHighlight);
+            });
+            
+            // Initialize toggle position
+            updateToggleHighlight();
+            
+            // Update on window resize
+            window.addEventListener('resize', updateToggleHighlight);
 
             // ----- Name Capitalization (on blur) -----
             const firstNameInput = document.getElementById('firstName');
@@ -987,38 +1098,11 @@ if (isset($_SESSION['user_id'])) {
                 }
             }
 
-            birthMonth.addEventListener('change', populateDays);
-            birthYear.addEventListener('input', populateDays);
-
-            // Helper: calculate birth year from age and selected month/day
-            function calculateYearFromAge(age, month, day) {
-                const today = new Date();
-                const currentYear = today.getFullYear();
-                const currentMonth = today.getMonth() + 1; // months are 0-indexed
-                const currentDay = today.getDate();
-
-                if (!month || !day) {
-                    // No month/day selected → assume birthday already passed this year? Simpler: just subtract age.
-                    return currentYear - age;
-                }
-
-                const monthNum = parseInt(month);
-                const dayNum = parseInt(day);
-
-                // If birthday (month/day) is after today, the birthday hasn't occurred yet this year,
-                // so the age was reached last year.
-                if (monthNum > currentMonth || (monthNum === currentMonth && dayNum > currentDay)) {
-                    return currentYear - age - 1;
-                } else {
-                    return currentYear - age;
-                }
-            }
-
             // Helper: calculate age from full birthdate
             function calculateAgeFromBirthdate(year, month, day) {
                 if (!year || !month || !day) return null;
                 const today = new Date();
-                const birthDate = new Date(year, month-1, day); // month is 0-indexed in JS
+                const birthDate = new Date(year, month - 1, day); // month is 0-indexed in JS
                 let age = today.getFullYear() - birthDate.getFullYear();
                 const m = today.getMonth() - birthDate.getMonth();
                 if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
@@ -1027,49 +1111,29 @@ if (isset($_SESSION['user_id'])) {
                 return age;
             }
 
-            // Age input: when user types age, compute and set birth year
-            ageInput.addEventListener('input', function() {
-                const age = parseInt(this.value);
-                if (age && age > 0 && age < 120) {
-                    const month = birthMonth.value;
-                    const day = birthDay.value;
-                    const year = calculateYearFromAge(age, month, day);
-                    birthYear.value = year;
-                    populateDays(); // in case month changed, days list updates
-                } else {
-                    // Clear year if age invalid
-                    birthYear.value = '';
-                }
-            });
-
-            // When month or day changes, adjust year to keep age constant (if age is set)
-            function handleMonthDayChange() {
-                const age = parseInt(ageInput.value);
-                if (age && age > 0 && age < 120) {
-                    const month = birthMonth.value;
-                    const day = birthDay.value;
-                    if (month && day) {
-                        const year = calculateYearFromAge(age, month, day);
-                        birthYear.value = year;
+            // When month, day, or year changes, calculate age from birthdate
+            function handleBirthdateChange() {
+                populateDays();
+                
+                const year = parseInt(birthYear.value);
+                const month = birthMonth.value;
+                const day = birthDay.value;
+                
+                if (year && month && day) {
+                    const newAge = calculateAgeFromBirthdate(year, month, day);
+                    if (newAge !== null && newAge >= 0) {
+                        ageInput.value = newAge;
+                    } else {
+                        ageInput.value = '';
                     }
                 } else {
-                    // If age is not set, calculate age from current birthdate
-                    const year = parseInt(birthYear.value);
-                    const month = birthMonth.value;
-                    const day = birthDay.value;
-                    if (year && month && day) {
-                        const newAge = calculateAgeFromBirthdate(year, month, day);
-                        if (newAge !== null) {
-                            ageInput.value = newAge;
-                        }
-                    }
+                    ageInput.value = '';
                 }
-                populateDays(); // ensure days are correct
             }
 
-            birthMonth.addEventListener('change', handleMonthDayChange);
-            birthDay.addEventListener('change', handleMonthDayChange);
-            // Year is readonly, so no need to listen for its change
+            birthMonth.addEventListener('change', handleBirthdateChange);
+            birthDay.addEventListener('change', handleBirthdateChange);
+            birthYear.addEventListener('input', handleBirthdateChange);
 
             // Initialize file list
             if (fileList) {
@@ -1219,6 +1283,15 @@ if (isset($_SESSION['user_id'])) {
                     return;
                 }
 
+                const recaptchaToken = typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : '';
+                if (!recaptchaToken) {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'Please complete the reCAPTCHA.';
+                        errorDiv.classList.add('show');
+                    }
+                    return;
+                }
+
                 // Combine name fields into full name for submission
                 const middleName = document.getElementById('middleName').value.trim();
                 const suffix = document.getElementById('suffix').value;
@@ -1228,8 +1301,12 @@ if (isset($_SESSION['user_id'])) {
                     fullName += `, ${suffix}`;
                 }
 
+                // Get student type
+                const studentType = document.querySelector('input[name="studentType"]:checked').value;
+
                 // Create FormData for file upload
                 const formData = new FormData();
+                formData.append('studentType', studentType);
                 formData.append('fullName', fullName);
                 formData.append('firstName', firstName);
                 formData.append('middleName', middleName);
@@ -1247,6 +1324,8 @@ if (isset($_SESSION['user_id'])) {
                 for (let file of fileInput.files) {
                     formData.append('documents[]', file);
                 }
+
+                formData.append('g-recaptcha-response', recaptchaToken);
 
                 try {
                     const response = await fetch('php/handle_enrollment.php', {
@@ -1273,6 +1352,9 @@ if (isset($_SESSION['user_id'])) {
                             successDiv.classList.add('show');
                         }
                     } else {
+                        if (typeof grecaptcha !== 'undefined' && grecaptcha.reset) {
+                            grecaptcha.reset();
+                        }
                         if (errorDiv) {
                             errorDiv.textContent = result.message || 'An error occurred. Please try again.';
                             errorDiv.classList.add('show');
@@ -1280,6 +1362,9 @@ if (isset($_SESSION['user_id'])) {
                     }
                 } catch (error) {
                     console.error('Error:', error);
+                    if (typeof grecaptcha !== 'undefined' && grecaptcha.reset) {
+                        grecaptcha.reset();
+                    }
                     if (errorDiv) {
                         errorDiv.textContent = 'An error occurred while processing your enrollment. Please try again.';
                         errorDiv.classList.add('show');
@@ -1368,6 +1453,9 @@ if (isset($_SESSION['user_id'])) {
             
             document.getElementById('termsOverlay').style.display = 'none';
             document.getElementById('enrollmentForm').style.display = 'block';
+            
+            // Update toggle highlight after form is displayed
+            setTimeout(updateToggleHighlight, 0);
             
             const gradeSelect = document.getElementById('grade');
             if (gradeSelect) {
@@ -1487,6 +1575,13 @@ if (isset($_SESSION['user_id'])) {
                 form.style.display = 'none';
                 form.reset();
                 
+                // Reset toggle to default (New Student)
+                const newStudentRadio = document.getElementById('newStudent');
+                if (newStudentRadio) {
+                    newStudentRadio.checked = true;
+                    updateToggleHighlight();
+                }
+                
                 const fileList = document.getElementById('fileList');
                 if (fileList) {
                     fileList.innerHTML = '<p style="color: #999; margin: 0;">No files selected</p>';
@@ -1505,6 +1600,11 @@ if (isset($_SESSION['user_id'])) {
                 const birthDay = document.getElementById('birthDay');
                 if (birthDay) {
                     birthDay.innerHTML = '<option value="">Day</option>';
+                }
+                
+                const ageInput = document.getElementById('age');
+                if (ageInput) {
+                    ageInput.value = '';
                 }
                 
                 if (fileInput) {

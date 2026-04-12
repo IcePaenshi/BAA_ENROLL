@@ -184,6 +184,45 @@ try {
     exit();
 }
 
+// Verify reCAPTCHA
+$recaptchaSecret = '6LfPGrAsAAAAAOKpRAWX73LSBsf0IgKBG0HAW06D';
+$recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
+
+if (empty($recaptchaResponse)) {
+    echo json_encode(['success' => false, 'message' => 'reCAPTCHA verification is required']);
+    exit();
+}
+
+$recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
+$recaptchaData = [
+    'secret' => $recaptchaSecret,
+    'response' => $recaptchaResponse,
+    'remoteip' => $_SERVER['REMOTE_ADDR'] ?? null
+];
+
+$options = [
+    'http' => [
+        'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+        'method' => 'POST',
+        'content' => http_build_query($recaptchaData)
+    ]
+];
+
+$context = stream_context_create($options);
+$result = file_get_contents($recaptchaUrl, false, $context);
+
+if ($result === false) {
+    echo json_encode(['success' => false, 'message' => 'reCAPTCHA verification failed']);
+    exit();
+}
+
+$recaptchaResult = json_decode($result, true);
+
+if (!$recaptchaResult['success']) {
+    echo json_encode(['success' => false, 'message' => 'reCAPTCHA verification failed']);
+    exit();
+}
+
 // Get form data with proper sanitization
 $firstName  = trim($_POST['firstName'] ?? '');
 $middleName = trim($_POST['middleName'] ?? '');

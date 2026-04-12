@@ -585,6 +585,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         .pass { color: #10b981; font-weight: 600; }
         .fail { color: #ef4444; font-weight: 600; }
         .tag { display: inline-block; background: #e5e7eb; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; margin: 2px; }
+        .dir-sort-option.active { background-color: #0a2d63; color: #fff; border-color: #0a2d63; }
     </style>
     <script>
         const gradeFees = {
@@ -1244,6 +1245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         function openAddUserModal() {
             const modal = document.getElementById('addUserModal');
             if (modal) modal.style.display = 'flex';
+            toggleModalStudentFields();
         }
 
         function closeAddUserModal() {
@@ -1252,39 +1254,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             const form = document.getElementById('createUserForm');
             if (form) form.reset();
             const studentFields = document.getElementById('modalStudentFields');
-            if (studentFields) studentFields.style.display = 'none';
+            if (studentFields) studentFields.classList.add('hidden');
             const roleSelect = document.getElementById('modalRoleSelect');
             if (roleSelect) roleSelect.disabled = false;
             const enrollmentIdField = document.getElementById('modalEnrollmentId');
             if (enrollmentIdField) enrollmentIdField.value = '';
+            syncModalStudentFieldConstraints();
         }
 
-        function openSearchModal() {
-            const modal = document.getElementById('searchUserModal');
-            if (modal) modal.style.display = 'flex';
-            loadAllUsersForSearch();
+        function syncModalAgeFromBirthdate() {
+            const bdEl = document.getElementById('modalBirthdate');
+            const ageEl = document.getElementById('modalAge');
+            if (!bdEl || !ageEl) return;
+            const bd = bdEl.value;
+            if (!bd) {
+                ageEl.value = '';
+                return;
+            }
+            const parts = bd.split('-');
+            if (parts.length !== 3) {
+                ageEl.value = '';
+                return;
+            }
+            const birth = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+            if (isNaN(birth.getTime())) {
+                ageEl.value = '';
+                return;
+            }
+            const today = new Date();
+            let age = today.getFullYear() - birth.getFullYear();
+            const m = today.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+                age--;
+            }
+            ageEl.value = age >= 0 ? String(age) : '';
         }
 
-        function closeSearchModal() {
-            const modal = document.getElementById('searchUserModal');
-            if (modal) modal.style.display = 'none';
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) searchInput.value = '';
-            document.querySelectorAll('.sort-option').forEach(opt => opt.classList.remove('active'));
-            const sortName = document.getElementById('sort-name');
-            if (sortName) sortName.classList.add('active');
-            const filterStudent = document.getElementById('filterStudent');
-            if (filterStudent) filterStudent.checked = false;
-            const filterTeacher = document.getElementById('filterTeacher');
-            if (filterTeacher) filterTeacher.checked = false;
-            <?php if ($userRole == 'admin'): ?>
-            const filterAdmin = document.getElementById('filterAdmin');
-            if (filterAdmin) filterAdmin.checked = false;
-            <?php endif; ?>
-            const filterGradeLevel = document.getElementById('filterGradeLevel');
-            if (filterGradeLevel) filterGradeLevel.value = '';
-            const filterSectionContainer = document.getElementById('filterSectionContainer');
-            if (filterSectionContainer) filterSectionContainer.style.display = 'none';
+        function syncModalStudentFieldConstraints() {
+            const isStudent = document.getElementById('modalRoleSelect')?.value === 'student';
+            const strandVisible = document.getElementById('modalStrandContainer') && !document.getElementById('modalStrandContainer').classList.contains('hidden');
+            const pairs = [
+                ['modalGradeLevel', isStudent],
+                ['modalSectionSelect', isStudent],
+                ['modalStrand', isStudent && strandVisible]
+            ];
+            pairs.forEach(([id, req]) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.disabled = !isStudent;
+                if (req) el.setAttribute('required', 'required');
+                else el.removeAttribute('required');
+            });
+            const lrn = document.getElementById('modalLrnField');
+            if (lrn) {
+                lrn.disabled = !isStudent;
+                lrn.removeAttribute('required');
+            }
+            // Age, gender, birthdate, and phone are now always enabled for all users
+            const alwaysEnabled = ['modalGender', 'modalBirthdate', 'modalPhone'];
+            alwaysEnabled.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.disabled = false;
+                    el.setAttribute('required', 'required');
+                }
+            });
+            const ageEl = document.getElementById('modalAge');
+            if (ageEl) {
+                ageEl.disabled = false;
+                ageEl.readOnly = true;
+                ageEl.removeAttribute('required');
+            }
         }
 
         function openDeleteUserModal() {
@@ -1360,6 +1400,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
 
                     closeAddUserModal();
+                    if (typeof loadAllUsersDirectory === 'function') {
+                        loadAllUsersDirectory();
+                    }
                 } else {
                     alert('Error creating user: ' + (data.message || 'Unknown error'));
                 }
@@ -1795,71 +1838,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
 
-        // ---------- Search & Filter Functions ----------
+        // ---------- Users directory (sidebar "Users") ----------
         let allUsers = [];
-        let currentSort = 'name';
+        let userDirectorySort = 'name';
+        let userDirectoryPageSize = 10;
 
-        function loadAllUsersForSearch() {
-            fetch('php/get_users.php')
+        function escapeUserDirHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function loadAllUsersDirectory() {
+            const listEl = document.getElementById('userDirectoryList');
+            if (listEl) listEl.innerHTML = '<div class="text-center p-10 text-gray-500">Loading users...</div>';
+            fetch('php/get_users.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.users) {
                         allUsers = data.users;
-                        performSearch();
+                        applyUserDirectoryFilters();
+                    } else if (listEl) {
+                        listEl.innerHTML = '<div class="text-center p-10 text-red-600">Could not load users.</div>';
                     }
                 })
-                .catch(error => console.error('Error loading users for search:', error));
+                .catch(error => {
+                    console.error('Error loading users directory:', error);
+                    if (listEl) listEl.innerHTML = '<div class="text-center p-10 text-red-600">Network error.</div>';
+                });
         }
 
-        function setSort(sortBy) {
-            currentSort = sortBy;
-            document.querySelectorAll('.sort-option').forEach(opt => opt.classList.remove('active'));
-            const sortEl = document.getElementById(`sort-${sortBy}`);
+        function setUserDirectorySort(sortBy) {
+            userDirectorySort = sortBy;
+            document.querySelectorAll('.dir-sort-option').forEach(opt => opt.classList.remove('active'));
+            const sortEl = document.getElementById('dir-sort-' + sortBy);
             if (sortEl) sortEl.classList.add('active');
-            performSearch();
+            applyUserDirectoryFilters();
         }
 
-        function applyFilters() {
-            performSearch();
+        function getSelectedUserDirectoryGrades() {
+            return Array.from(document.querySelectorAll('.dirFilterGradeCheckbox:checked')).map(el => el.value);
         }
 
-        function performSearch() {
-            const searchInput = document.getElementById('searchInput');
-            if (!searchInput) return;
-            const searchTerm = searchInput.value.toLowerCase();
-            
-            const filterStudent = document.getElementById('filterStudent')?.checked || false;
-            const filterTeacher = document.getElementById('filterTeacher')?.checked || false;
+        function getSelectedUserDirectorySections() {
+            return Array.from(document.querySelectorAll('.dirFilterSectionCheckbox:checked')).map(el => el.value);
+        }
+
+        function updateUserDirectoryFilterSections() {
+            const selectedGrades = getSelectedUserDirectoryGrades();
+            const filterSectionContainer = document.getElementById('dirFilterSectionContainer');
+            const sectionCheckboxes = document.getElementById('dirFilterSectionCheckboxes');
+            const gradeSections = {
+                'Grade 7': ['Love', 'Joy'],
+                'Grade 8': ['Patience', 'Peace'],
+                'Grade 9': ['Goodness', 'Kindness'],
+                'Grade 10': ['Gentleness', 'Faithfulness'],
+                'Grade 11': ['Self-Control', 'Honesty'],
+                'Grade 12': ['Humility', 'Meekness']
+            };
+
+            if (!filterSectionContainer || !sectionCheckboxes) return;
+
+            const sectionSet = new Set();
+            selectedGrades.forEach(grade => {
+                (gradeSections[grade] || []).forEach(section => sectionSet.add(section));
+            });
+
+            if (sectionSet.size > 0) {
+                filterSectionContainer.classList.remove('hidden');
+                sectionCheckboxes.innerHTML = '';
+                Array.from(sectionSet).sort().forEach(section => {
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center gap-2 text-sm text-gray-700 cursor-pointer';
+                    label.innerHTML = `<input type="checkbox" class="dirFilterSectionCheckbox w-4 h-4" value="${section}"> ${section}`;
+                    const checkbox = label.querySelector('input');
+                    checkbox.addEventListener('change', applyUserDirectoryFilters);
+                    sectionCheckboxes.appendChild(label);
+                });
+            } else {
+                filterSectionContainer.classList.add('hidden');
+                sectionCheckboxes.innerHTML = '';
+            }
+        }
+
+        function setUserDirectoryPageSize(value) {
+            const size = parseInt(value, 10);
+            if (!isNaN(size) && size > 0) {
+                userDirectoryPageSize = size;
+                applyUserDirectoryFilters();
+            }
+        }
+
+        function applyUserDirectoryFilters() {
+            const listEl = document.getElementById('userDirectoryList');
+            if (!listEl) return;
+
+            const searchInput = document.getElementById('dirSearchInput');
+            const searchTerm = (searchInput && searchInput.value ? searchInput.value : '').toLowerCase();
+
+            const filterStudent = document.getElementById('dirFilterStudent')?.checked || false;
+            const filterTeacher = document.getElementById('dirFilterTeacher')?.checked || false;
+            const filterCashier = document.getElementById('dirFilterCashier')?.checked || false;
+            const filterRegistrar = document.getElementById('dirFilterRegistrar')?.checked || false;
             <?php if ($userRole == 'admin'): ?>
-            const filterAdmin = document.getElementById('filterAdmin')?.checked || false;
+            const filterAdmin = document.getElementById('dirFilterAdmin')?.checked || false;
+            <?php else: ?>
+            const filterAdmin = false;
             <?php endif; ?>
-            
-            const filterGrade = document.getElementById('filterGradeLevel')?.value;
-            const filterSection = document.getElementById('filterSection')?.value;
-            
+
+            const filterGrades = getSelectedUserDirectoryGrades();
+            const filterSections = getSelectedUserDirectorySections();
+
             let filteredUsers = allUsers.filter(user => {
-                const matchesSearch = searchTerm === '' || 
-                    user.full_name?.toLowerCase().includes(searchTerm) ||
-                    user.username?.toLowerCase().includes(searchTerm) ||
-                    user.email?.toLowerCase().includes(searchTerm);
-                
+                const matchesSearch = searchTerm === '' ||
+                    (user.full_name && user.full_name.toLowerCase().includes(searchTerm)) ||
+                    (user.username && user.username.toLowerCase().includes(searchTerm)) ||
+                    (user.email && user.email.toLowerCase().includes(searchTerm));
                 if (!matchesSearch) return false;
-                
+
                 const roleFilters = [];
                 if (filterStudent) roleFilters.push('student');
                 if (filterTeacher) roleFilters.push('teacher');
-                <?php if ($userRole == 'admin'): ?>
+                if (filterCashier) roleFilters.push('cashier');
+                if (filterRegistrar) roleFilters.push('registrar');
                 if (filterAdmin) roleFilters.push('admin');
-                <?php endif; ?>
-                
+
                 if (roleFilters.length > 0 && !roleFilters.includes(user.role)) return false;
-                if (filterGrade && user.grade_level !== filterGrade) return false;
-                if (filterSection && user.section !== filterSection) return false;
+                if (filterGrades.length > 0 && user.role === 'student' && !filterGrades.includes(user.grade_level)) return false;
+                if (filterSections.length > 0 && user.role === 'student' && !filterSections.includes(user.section)) return false;
                 return true;
             });
-            
+
             filteredUsers.sort((a, b) => {
-                switch(currentSort) {
+                switch (userDirectorySort) {
                     case 'name': return (a.full_name || '').localeCompare(b.full_name || '');
                     case 'role': return (a.role || '').localeCompare(b.role || '');
                     case 'grade': return (a.grade_level || '').localeCompare(b.grade_level || '');
@@ -1867,75 +1985,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     default: return 0;
                 }
             });
-            displaySearchResults(filteredUsers);
+
+            renderUserDirectoryList(filteredUsers);
         }
 
-        function displaySearchResults(users) {
-            const resultsDiv = document.getElementById('searchResults');
+        function toggleUserDirectoryDetails(userId) {
+            const row = document.getElementById('user-dir-details-' + userId);
+            if (row) row.classList.toggle('hidden');
+        }
+
+        function renderUserDirectoryList(users) {
+            const resultsDiv = document.getElementById('userDirectoryList');
             if (!resultsDiv) return;
-            
+
             if (users.length === 0) {
-                resultsDiv.innerHTML = '<div class="text-center text-gray-500 py-10">No users found matching your criteria.</div>';
+                resultsDiv.innerHTML = '<div class="text-center text-gray-500 py-10">No users match your filters.</div>';
                 return;
             }
-            
-            let html = '';
-            if (userRole === 'admin' && users.some(u => u.role === 'student')) {
-                html += `
-                    <div class="mb-4 p-3 bg-blue-50 rounded flex flex-wrap gap-2 justify-between items-center">
-                        <span class="text-blue-800 font-medium">Batch Promote Students</span>
-                        <button onclick="openBatchPromoteModal()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 transition">
-                            Promote by Grade & Section
-                        </button>
-                    </div>
-                `;
-            }
 
-            users.forEach(user => {
+            const displayedUsers = users.slice(0, userDirectoryPageSize);
+            let html = '';
+
+            displayedUsers.forEach(user => {
+                const fullName = user.full_name || [user.first_name, user.middle_name, user.last_name, user.suffix].filter(Boolean).join(' ') || 'N/A';
                 const roleDisplay = user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A';
-                let roleColor = user.role === 'admin' ? '#0a2d63' : (user.role === 'cashier' ? '#f59e0b' : (user.role === 'registrar' ? '#ef4444' : (user.role === 'teacher' ? '#10b981' : '#6c757d')));
+                const roleColor = user.role === 'admin' ? '#0a2d63' : (user.role === 'cashier' ? '#f59e0b' : (user.role === 'registrar' ? '#ef4444' : (user.role === 'teacher' ? '#10b981' : '#6c757d')));
                 const isActive = user.status == 1;
-                
+                const gs = user.role === 'student' && user.grade_level
+                    ? escapeUserDirHtml(user.grade_level + (user.section ? ' - ' + user.section : ''))
+                    : '';
+                const phoneDisp = user.phone
+                    ? (String(user.phone).startsWith('+63') ? escapeUserDirHtml(user.phone) : '+63' + escapeUserDirHtml(user.phone))
+                    : '—';
+                const canPromote = (userRole === 'admin' || userRole === 'registrar') && user.role === 'student';
+                const showToggle = userRole === 'admin' && user.id != currentUserId;
+
                 html += `
-                    <div class="search-result-item p-4 border-b border-gray-200 hover:bg-gray-50">
-                        <div class="flex flex-col md:flex-row justify-between items-start">
-                            <div class="flex-1 mb-2 md:mb-0">
-                                <div class="user-name font-semibold text-[#0a2d63] mb-1">${user.full_name || 'N/A'}</div>
-                                <div class="user-details text-xs text-gray-600 flex gap-2 flex-wrap">
-                                    <span>${user.username || 'N/A'}</span>
-                                    <span>•</span>
-                                    <span>${user.email || 'N/A'}</span>
-                                    <span>•</span>
-                                    <span class="px-2 py-0.5 rounded text-xs font-semibold text-white" style="background: ${roleColor};">${roleDisplay}</span>
-                                    ${user.grade_level ? `<span>•</span><span>${user.grade_level} - ${user.section || ''}</span>` : ''}
+                    <div class="border-b border-gray-200 last:border-b-0">
+                        <div class="flex items-center justify-between p-3 md:p-4 hover:bg-gray-50">
+                            <div class="flex items-center gap-2 flex-1 min-w-0">
+                                <button type="button" class="text-[#0a2d63] font-bold px-1 shrink-0" title="Show details" onclick="event.stopPropagation(); toggleUserDirectoryDetails(${user.id})">▾</button>
+                                <div class="cursor-pointer flex-1 min-w-0" onclick="toggleUserDirectoryDetails(${user.id})">
+                                    <div class="font-semibold text-[#0a2d63] truncate">${escapeUserDirHtml(fullName)}</div>
+                                    <div class="text-sm text-gray-600 flex items-center gap-x-2 gap-y-1 mt-0.5">
+                                        ${gs ? '<span>' + gs + '</span><span>·</span>' : ''}
+                                        <span class="px-2 py-0.5 rounded text-xs font-semibold text-white" style="background:${roleColor}">${escapeUserDirHtml(roleDisplay)}</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2">
-                                ${userRole === 'admin' && user.role === 'student' ?
-                                `
-                                    <button onclick="promoteStudent(${user.id})" 
-                                            class="bg-green-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-green-700 transition"
-                                            title="Promote to next grade">
-                                        Promote
-                                    </button>
-                                ` : ''}
-                                ${userRole === 'admin' && user.id != currentUserId ?
-                                `
-                                    <div class="status-toggle ml-2">
+                            <div class="flex items-center gap-2 shrink-0 ml-2" onclick="event.stopPropagation()">
+                                ${canPromote ? `<button type="button" onclick="promoteStudent(${user.id})" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-green-700 transition">Promote</button>` : ''}
+                                ${showToggle ? `
+                                    <div class="status-toggle">
                                         <label class="switch">
                                             <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleUserStatus(${user.id}, this.checked)">
                                             <span class="slider"></span>
                                         </label>
                                         <span class="text-xs ${isActive ? 'text-green-600' : 'text-red-600'} ml-1">${isActive ? 'Active' : 'Inactive'}</span>
-                                    </div>
-                                ` : ''}
+                                    </div>` : ''}
+                            </div>
+                        </div>
+                        <div id="user-dir-details-${user.id}" class="hidden border-t border-gray-100 bg-gray-50 px-4 py-3 pl-10 text-sm text-gray-700">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div><span class="font-semibold">Username:</span> ${escapeUserDirHtml(user.username || '—')}</div>
+                                <div><span class="font-semibold">Email:</span> ${escapeUserDirHtml(user.email || '—')}</div>
+                                <div><span class="font-semibold">Grade / Section:</span> ${user.grade_level ? escapeUserDirHtml((user.grade_level || '') + (user.section ? ' - ' + user.section : '')) : '—'}</div>
+                                <div><span class="font-semibold">Gender:</span> ${escapeUserDirHtml(user.gender || '—')}</div>
+                                <div><span class="font-semibold">Birthdate:</span> ${escapeUserDirHtml(user.birthdate || '—')}</div>
+                                <div><span class="font-semibold">Phone:</span> ${escapeUserDirHtml(phoneDisp)}</div>
+                                <div><span class="font-semibold">Status:</span> ${isActive ? 'Active' : 'Inactive'}</div>
+                                <div><span class="font-semibold">Joined:</span> ${user.created_at ? escapeUserDirHtml(user.created_at) : '—'}</div>
                             </div>
                         </div>
                     </div>
                 `;
             });
-            
-            resultsDiv.innerHTML = html;
+
+            const summary = `<div class="text-sm text-gray-600 p-3">Showing ${displayedUsers.length} of ${users.length} user${users.length === 1 ? '' : 's'}.</div>`;
+            resultsDiv.innerHTML = html + summary;
         }
 
         // ---------- Promote Functions ----------
@@ -1950,7 +2077,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             .then(data => {
                 if (data.success) {
                     alert(data.message);
-                    loadAllUsersForSearch();
+                    if (typeof loadAllUsersDirectory === 'function') loadAllUsersDirectory();
                 } else {
                     alert('Error: ' + data.message);
                 }
@@ -1970,7 +2097,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             const sectionSel = document.getElementById('batchPromoteSection');
             sectionSel.innerHTML = '<option value="">All Sections</option>';
             
-            fetch('php/get_users.php')
+            fetch('php/get_users.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.users) {
@@ -2034,7 +2165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (data.success) {
                     alert(data.message);
                     closeBatchPromoteModal();
-                    loadAllUsersForSearch();
+                    if (typeof loadAllUsersDirectory === 'function') loadAllUsersDirectory();
                 } else {
                     alert('Error: ' + data.message);
                 }
@@ -2054,49 +2185,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    loadAllUsersForSearch();
+                    if (typeof loadAllUsersDirectory === 'function') loadAllUsersDirectory();
                 } else {
                     alert('Error updating status: ' + data.message);
-                    loadAllUsersForSearch();
+                    if (typeof loadAllUsersDirectory === 'function') loadAllUsersDirectory();
                 }
             })
             .catch(error => {
                 console.error('Error toggling status:', error);
                 alert('Network error');
-                loadAllUsersForSearch();
+                if (typeof loadAllUsersDirectory === 'function') loadAllUsersDirectory();
             });
-        }
-
-        function updateFilterSections() {
-            const gradeLevel = document.getElementById('filterGradeLevel')?.value;
-            const filterSectionContainer = document.getElementById('filterSectionContainer');
-            const sectionSelect = document.getElementById('filterSection');
-            
-            if (gradeLevel) {
-                if (filterSectionContainer) filterSectionContainer.style.display = 'block';
-                const gradeSections = {
-                    'Grade 7': ['Love', 'Joy'],
-                    'Grade 8': ['Patience', 'Peace'],
-                    'Grade 9': ['Goodness', 'Kindness'],
-                    'Grade 10': ['Gentleness', 'Faithfulness'],
-                    'Grade 11': ['Self-Control', 'Honesty'],
-                    'Grade 12': ['Humility', 'Meekness']
-                };
-                if (sectionSelect) {
-                    sectionSelect.innerHTML = '<option value="">All Sections</option>';
-                    if (gradeSections[gradeLevel]) {
-                        gradeSections[gradeLevel].forEach(section => {
-                            const option = document.createElement('option');
-                            option.value = section;
-                            option.textContent = section;
-                            sectionSelect.appendChild(option);
-                        });
-                    }
-                }
-            } else {
-                if (filterSectionContainer) filterSectionContainer.style.display = 'none';
-                if (sectionSelect) sectionSelect.innerHTML = '<option value="">All Sections</option>';
-            }
         }
 
         // ---------- Enrollment Modal Functions ----------
@@ -2312,18 +2411,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         function acceptEnrollment(enrollmentId) {
-            fetch(`php/get_enrollment_details.php?id=${enrollmentId}`)
+            if (!confirm('Accept this enrollment? A student account will be created and login details will be emailed.')) {
+                return;
+            }
+            const body = new URLSearchParams();
+            body.set('enrollment_id', String(enrollmentId));
+            fetch('php/accept_enrollment_student.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString()
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        openAddUserModalWithEnrollment(data.data);
+                        let msg = data.message || 'Enrollment accepted.';
+                        if (data.mail_sent === false && data.mail_warning) {
+                            msg += '\n\nEmail could not be sent: ' + data.mail_warning;
+                        }
+                        alert(msg);
+                        if (typeof loadEnrollments === 'function') {
+                            loadEnrollments();
+                        }
                     } else {
-                        alert('Error loading enrollment details: ' + data.message);
+                        alert(data.message || 'Accept failed');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Failed to load enrollment details');
+                    alert('Failed to accept enrollment');
                 });
         }
 
@@ -2351,8 +2466,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Show the student fields so admin/registrar can review/add grade, section, and LRN
             const studentFields = document.getElementById('modalStudentFields');
             if (studentFields) {
-                studentFields.style.display = 'block';
+                studentFields.classList.remove('hidden');
             }
+            syncModalStudentFieldConstraints();
+            syncModalAgeFromBirthdate();
 
             function normalizeGradeLevel(grade) {
                 const gradeMap = {
@@ -2379,7 +2496,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 setElementValue('modalSectionSelect', enrollee.section);
             }
             setElementValue('modalLrnField', enrollee.lrn || '');
-            setElementValue('modalAge', enrollee.age);
             setElementValue('modalGender', enrollee.gender);
             setElementValue('modalBirthdate', enrollee.birthdate);
             let phoneValue = enrollee.phone || '';
@@ -2408,12 +2524,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             const roleSelect = document.getElementById('modalRoleSelect');
             const studentFields = document.getElementById('modalStudentFields');
             if (!roleSelect || !studentFields) return;
-            
+
             if (roleSelect.value === 'student') {
-                studentFields.style.display = 'block';
+                studentFields.classList.remove('hidden');
             } else {
-                studentFields.style.display = 'none';
+                studentFields.classList.add('hidden');
             }
+            syncModalStudentFieldConstraints();
+            // Always sync age from birthdate for all users
+            syncModalAgeFromBirthdate();
         }
 
         function updateModalSections() {
@@ -2448,6 +2567,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     strandContainer.classList.add('hidden');
                 }
             }
+            syncModalStudentFieldConstraints();
         }
 
         function updateStatus(enrollmentId, status) {
@@ -2508,7 +2628,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             const searchTerm = document.getElementById('deleteSearchInput')?.value.toLowerCase() || '';
             
             deleteList.innerHTML = '<div class="text-center text-gray-500 py-10">Loading users...</div>';
-            fetch('php/get_users.php')
+            fetch('php/get_users.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.users) {
@@ -2654,6 +2778,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 card.classList.remove('active');
                 card.classList.add('hidden');
             });
+            
             function activate(id){
                 const el = document.getElementById(id);
                 if(el){
@@ -2678,7 +2803,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     break;
                 case 'users':
                     if (['admin','registrar'].includes(userRole)) {
+                        activate('userManagementCard');
                         activate('usersCard');
+                        if (typeof loadAllUsersDirectory === 'function') {
+                            loadAllUsersDirectory();
+                        }
+                    }
+                    break;
+                case 'user-directory':
+                    if (['admin','registrar'].includes(userRole)) {
+                        activate('userDirectoryCard');
+                        if (typeof loadAllUsersDirectory === 'function') {
+                            loadAllUsersDirectory();
+                        }
                     }
                     break;
                 case 'payables':
@@ -2967,7 +3104,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             studentSelect.innerHTML = '<option value="">Loading students...</option>';
             
-            fetch('php/get_users.php')
+            fetch('php/get_users.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.users) {
@@ -2991,6 +3132,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // ---------- DOM Ready ----------
         document.addEventListener('DOMContentLoaded', function() {
             <?php if (in_array($userRole, ['admin', 'registrar'])): ?>
+            const modalBirth = document.getElementById('modalBirthdate');
+            if (modalBirth) {
+                modalBirth.addEventListener('change', syncModalAgeFromBirthdate);
+                modalBirth.addEventListener('input', syncModalAgeFromBirthdate);
+            }
             updateChart();
             loadEnrollments();
             setInterval(loadEnrollments, 30000);
@@ -3011,14 +3157,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             window.onclick = function(event) {
                 const addModal = document.getElementById('addUserModal');
-                const searchModal = document.getElementById('searchUserModal');
                 const deleteModal = document.getElementById('deleteUserModal');
                 const documentModal = document.getElementById('documentModal');
                 const enrollmentSearchModal = document.getElementById('enrollmentSearchModal');
                 const studentSelectModal = document.getElementById('studentSelectModal');
                 const batchPromoteModal = document.getElementById('batchPromoteModal');
                 if (event.target === addModal) closeAddUserModal();
-                if (event.target === searchModal) closeSearchModal();
                 if (event.target === deleteModal) closeDeleteUserModal();
                 if (event.target === documentModal) closeDocumentModal();
                 if (event.target === enrollmentSearchModal) closeEnrollmentSearchModal();
@@ -3456,7 +3600,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="dashboard-content flex justify-center items-start w-full p-5 min-h-[calc(100vh-120px)]">
                 <div class="centered-container w-full max-w-[1200px] mx-auto">
                     <?php if (in_array($userRole, ['admin', 'registrar'])): ?>
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden <?php echo (in_array($userRole, ['admin', 'registrar'])) ? 'active' : ''; ?>" id="adminEnrollmentCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden grades-card <?php echo (in_array($userRole, ['admin', 'registrar'])) ? 'active' : ''; ?>" id="adminEnrollmentCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div class="stats-grid grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div class="stat-card">
@@ -3545,34 +3689,101 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 </div>
                             </div>
                         </div>
-
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="usersCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden users-card" id="userManagementCard">
                             <div class="card-content p-8 space-y-6 w-full">
-                                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div class="flex justify-between items-center">
                                     <div>
                                         <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">User Management</h3>
-                                        <p class="text-gray-600">Manage user accounts - add and delete users</p>
+                                        <p class="text-gray-600">Manage user accounts - add, edit and delete users</p>
                                     </div>
-                                    <button onclick="openSearchModal()" class="search-icon-outline bg-white border-2 border-[#0a2d63] rounded p-2 hover:bg-gray-100 transition w-full sm:w-auto">
-                                        <img src="images/search_icon.png" alt="Search" class="w-6 h-6 mx-auto sm:mx-0">
-                                    </button>
                                 </div>
-
-                                <div class="flex gap-4 md:gap-8 justify-center flex-wrap">
-                                    <button onclick="openAddUserModal()" class="bg-green-600 text-white px-6 py-3 rounded font-medium hover:bg-green-700 transition flex items-center justify-center gap-2 w-full sm:w-auto">
+                                <div class="flex gap-4 justify-center flex-wrap">
+                                    <button onclick="openAddUserModal()" class="bg-green-600 text-white px-6 py-3 rounded font-medium hover:bg-green-700 transition flex items-center gap-2">
                                         Add User
                                     </button>
-                                    <button onclick="openEditUserModal()" class="bg-yellow-600 text-white px-6 py-3 rounded font-medium hover:bg-yellow-700 transition flex items-center justify-center gap-2 w-full sm:w-auto">
+                                    <button onclick="openEditUserModal()" class="bg-yellow-500 text-white px-6 py-3 rounded font-medium hover:bg-yellow-600 transition flex items-center gap-2">
                                         Edit User
                                     </button>
-                                    <button onclick="openDeleteUserModal()" class="bg-red-600 text-white px-6 py-3 rounded font-medium hover:bg-red-700 transition flex items-center justify-center gap-2 w-full sm:w-auto">
+                                    <button onclick="openDeleteUserModal()" class="bg-red-600 text-white px-6 py-3 rounded font-medium hover:bg-red-700 transition flex items-center gap-2">
                                         Delete User
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="payablesManagementCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden users-card" id="usersCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <div>
+                                        <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Users</h3>
+                                        <p class="text-gray-600">View and manage all system users</p>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col lg:flex-row gap-4">
+                                    <div class="filter-section bg-white p-4 rounded-lg border border-gray-200 flex-1">
+                                        <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Filter by role</h4>
+                                        <div class="checkbox-group flex flex-wrap gap-3">
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" id="dirFilterStudent" class="w-4 h-4" value="student" onchange="applyUserDirectoryFilters()"> Student</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" id="dirFilterTeacher" class="w-4 h-4" value="teacher" onchange="applyUserDirectoryFilters()"> Teacher</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" id="dirFilterCashier" class="w-4 h-4" value="cashier" onchange="applyUserDirectoryFilters()"> Cashier</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" id="dirFilterRegistrar" class="w-4 h-4" value="registrar" onchange="applyUserDirectoryFilters()"> Registrar</label>
+                                            <?php if ($userRole === 'admin'): ?>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" id="dirFilterAdmin" class="w-4 h-4" value="admin" onchange="applyUserDirectoryFilters()"> Admin</label>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <div class="filter-section bg-white p-4 rounded-lg border border-gray-200 flex-1">
+                                        <h4 class="text-sm font-semibold text-[#0a2d63] mb-2">Filter students</h4>
+                                        <div class="checkbox-group flex flex-wrap gap-3">
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="dirFilterGradeCheckbox w-4 h-4" value="Grade 7" onchange="updateUserDirectoryFilterSections(); applyUserDirectoryFilters()"> Grade 7</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="dirFilterGradeCheckbox w-4 h-4" value="Grade 8" onchange="updateUserDirectoryFilterSections(); applyUserDirectoryFilters()"> Grade 8</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="dirFilterGradeCheckbox w-4 h-4" value="Grade 9" onchange="updateUserDirectoryFilterSections(); applyUserDirectoryFilters()"> Grade 9</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="dirFilterGradeCheckbox w-4 h-4" value="Grade 10" onchange="updateUserDirectoryFilterSections(); applyUserDirectoryFilters()"> Grade 10</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="dirFilterGradeCheckbox w-4 h-4" value="Grade 11" onchange="updateUserDirectoryFilterSections(); applyUserDirectoryFilters()"> Grade 11</label>
+                                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="dirFilterGradeCheckbox w-4 h-4" value="Grade 12" onchange="updateUserDirectoryFilterSections(); applyUserDirectoryFilters()"> Grade 12</label>
+                                        </div>
+                                        <div id="dirFilterSectionContainer" class="hidden mt-4">
+                                            <h5 class="text-xs font-semibold text-gray-700 mb-2">Section</h5>
+                                            <div id="dirFilterSectionCheckboxes" class="checkbox-group flex flex-wrap gap-3"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <div class="mb-4">
+                                        <label class="block mb-1 font-medium text-[#0a2d63]">Search by name, username, or email</label>
+                                        <input type="text" id="dirSearchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onkeyup="applyUserDirectoryFilters()">
+                                    </div>
+                                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                        <div class="flex flex-wrap gap-2 items-center">
+                                            <span class="text-sm font-semibold text-[#0a2d63]">Sort:</span>
+                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition active" onclick="setUserDirectorySort('name')" id="dir-sort-name">Name</span>
+                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setUserDirectorySort('role')" id="dir-sort-role">Role</span>
+                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setUserDirectorySort('grade')" id="dir-sort-grade">Grade</span>
+                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setUserDirectorySort('date')" id="dir-sort-date">Date joined</span>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-sm font-semibold text-[#0a2d63]">Show:</span>
+                                            <select id="dirPageSizeSelect" class="w-full sm:w-auto p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onchange="setUserDirectoryPageSize(this.value)">
+                                                <option value="5">5</option>
+                                                <option value="10" selected>10</option>
+                                                <option value="15">15</option>
+                                                <option value="20">20</option>
+                                                <option value="30">30</option>
+                                                <option value="50">50</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="userDirectoryList" class="border border-gray-200 rounded min-h-[200px]">
+                                    <div class="text-center p-10 text-gray-500">Open this tab to load users.</div>
+                                </div>
+                                <div class="mt-4 flex justify-end">
+                                    <button class="bg-blue-600 text-white px-5 py-2 rounded font-medium hover:bg-blue-700 transition w-full sm:w-auto" onclick="openBatchPromoteModal()">Promote by grade and section</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden payables-management-card" id="payablesManagementCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Payables Management</h3>
@@ -3627,7 +3838,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
 
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="paymentsCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden payments-card" id="paymentsCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Payment Processing</h3>
@@ -3671,7 +3882,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
 
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="adminProfileCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden profile-card" id="adminProfileCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Profile</h3>
@@ -3752,7 +3963,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
 
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="paymentsCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden payments-card" id="paymentsCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Payment Processing</h3>
@@ -4053,7 +4264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
 
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="subjectsCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden subjects-card" id="subjectsCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div class="subjects-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-gray-200">
                                     <div>
@@ -4117,7 +4328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
 
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="eventsCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden events-card" id="eventsCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Upcoming School Events</h3>
@@ -4167,7 +4378,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
 
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="payablesCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden payables-card" id="payablesCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Payables</h3>
@@ -4179,7 +4390,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
                         
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="profileCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden profile-card" id="profileCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Profile</h3>
@@ -4214,7 +4425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                         </div>
                         
-                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="announcementsCard">
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden announcements-card" id="announcementsCard">
                             <div class="card-content p-8 space-y-6 w-full">
                                 <div>
                                     <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Announcements</h3>
@@ -4338,7 +4549,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         </div>
                     </div>
 
-                    <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="teacherAttendanceCard">
+                    <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden teacher-attendance-card" id="teacherAttendanceCard">
                         <div class="card-content p-8 space-y-6 w-full">
                             <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
                                 <div>
@@ -4480,8 +4691,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             <select name="role" id="modalRoleSelect" onchange="toggleModalStudentFields()" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none">
                                 <option value="">Select Role</option>
                                 <option value="student">Student</option>
-                                <option value="teacher">Teacher</option>
                                 <?php if ($userRole == 'admin'): ?>
+                                <option value="teacher">Teacher</option>
                                 <option value="cashier">Cashier</option>
                                 <option value="registrar">Registrar</option>
                                 <option value="admin">Admin</option>
@@ -4490,6 +4701,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         </div>
                     </div>
                     
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <div class="form-group">
+                            <label class="block mb-2 font-medium text-gray-700">Age <span class="text-gray-500 font-normal">(from birthdate)</span></label>
+                            <input type="number" name="age" id="modalAge" min="0" max="120" readonly class="w-full p-2 border border-gray-300 rounded bg-gray-100 focus:ring-2 focus:ring-[#0a2d63] outline-none">
+                        </div>
+                        <div class="form-group">
+                            <label class="block mb-2 font-medium text-gray-700">Gender *</label>
+                            <select name="gender" id="modalGender" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none">
+                                <option value="">Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                        <div class="form-group sm:col-span-2">
+                            <label class="block mb-2 font-medium text-gray-700">Birthdate *</label>
+                            <input type="date" name="birthdate" id="modalBirthdate" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none">
+                        </div>
+                        <div class="form-group sm:col-span-2">
+                            <label class="block mb-2 font-medium text-gray-700">Phone Number *</label>
+                            <div class="phone-input-wrapper flex items-center border border-gray-300 rounded focus-within:ring-2 focus-within:ring-[#0a2d63]">
+                                <span class="phone-prefix bg-gray-100 px-3 py-2 rounded-l border-r border-gray-300">+63</span>
+                                <input type="text" name="phone" id="modalPhone" maxlength="10" placeholder="9XXXXXXXXX" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,10)" required class="w-full p-2 border-0 rounded-r focus:ring-0 outline-none">
+                            </div>
+                            <small class="text-gray-500 block mt-1">Enter 10 digits (without +63)</small>
+                        </div>
+                    </div>
+
                     <div id="modalStudentFields" class="student-fields hidden p-4 bg-gray-50 rounded mb-4 border border-gray-200">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div class="form-group">
@@ -4511,24 +4749,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 </select>
                             </div>
                             <div class="form-group sm:col-span-2">
-                                <label class="block mb-2 font-medium text-gray-700">LRN *</label>
+                                <label class="block mb-2 font-medium text-gray-700">LRN</label>
                                 <input type="text" name="lrn" id="modalLrnField" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none">
-                            </div>
-                            <div class="form-group">
-                                <label class="block mb-2 font-medium text-gray-700">Age *</label>
-                                <input type="number" name="age" id="modalAge" min="1" max="120" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="block mb-2 font-medium text-gray-700">Gender *</label>
-                                <select name="gender" id="modalGender" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" required>
-                                    <option value="">Select Gender</option>
-                                    <option value="Male">Male</option>
-                                    <option value="Female">Female</option>
-                                </select>
-                            </div>
-                            <div class="form-group sm:col-span-2">
-                                <label class="block mb-2 font-medium text-gray-700">Birthdate *</label>
-                                <input type="date" name="birthdate" id="modalBirthdate" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" required>
                             </div>
                             <div id="modalStrandContainer" class="form-group sm:col-span-2 hidden">
                                 <label class="block mb-2 font-medium text-gray-700">Strand *</label>
@@ -4538,14 +4760,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                     <option value="ABM">ABM</option>
                                     <option value="HUMSS">HUMSS</option>
                                 </select>
-                            </div>
-                            <div class="form-group sm:col-span-2">
-                                <label class="block mb-2 font-medium text-gray-700">Phone Number *</label>
-                                <div class="phone-input-wrapper flex items-center border border-gray-300 rounded focus-within:ring-2 focus-within:ring-[#0a2d63]">
-                                    <span class="phone-prefix bg-gray-100 px-3 py-2 rounded-l border-r border-gray-300">+63</span>
-                                    <input type="text" name="phone" id="modalPhone" maxlength="10" placeholder="9XXXXXXXXX" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,10)" class="w-full p-2 border-0 rounded-r focus:ring-0 outline-none" required>
-                                </div>
-                                <small class="text-gray-500 block mt-1">Enter 10 digits (without +63)</small>
                             </div>
                             <input type="hidden" id="modalEnrollmentId" value="">
                         </div>
@@ -4640,78 +4854,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="modal-footer p-4 md:p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg flex flex-col-reverse sm:flex-row justify-end gap-2 sticky bottom-0 z-10">
                 <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition w-full sm:w-auto" onclick="closeEditUserModal()">Cancel</button>
                 <button id="saveEditUserBtn" class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed" onclick="saveEditUser()" disabled>Save Changes</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="searchUserModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-[1000] p-4" style="display: none;">
-        <div class="modal-container bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl flex flex-col">
-            <div class="modal-header p-4 md:p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center sticky top-0 z-10">
-                <h3 class="text-lg md:text-xl font-semibold text-[#0a2d63]">Search Users</h3>
-                <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeSearchModal()">×</button>
-            </div>
-            <div class="modal-body p-4 md:p-6 flex-1 overflow-y-auto">
-                <div class="form-group mb-4">
-                    <label class="block mb-2 font-medium text-gray-700">Search by name, email, or username</label>
-                    <input type="text" id="searchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onkeyup="performSearch()">
-                </div>
-
-                <div class="filter-section bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200">
-                    <h4 class="text-sm font-semibold text-[#0a2d63] mb-3">Filter by Role</h4>
-                    <div class="checkbox-group flex flex-wrap gap-4">
-                        <div class="checkbox-item flex items-center gap-2">
-                            <input type="checkbox" id="filterStudent" class="w-4 h-4 text-[#0a2d63]" value="student" onchange="applyFilters()">
-                            <label for="filterStudent" class="text-sm text-gray-700 cursor-pointer">Student</label>
-                        </div>
-                        <div class="checkbox-item flex items-center gap-2">
-                            <input type="checkbox" id="filterTeacher" class="w-4 h-4 text-[#0a2d63]" value="teacher" onchange="applyFilters()">
-                            <label for="filterTeacher" class="text-sm text-gray-700 cursor-pointer">Teacher</label>
-                        </div>
-                        <div class="checkbox-item flex items-center gap-2">
-                            <input type="checkbox" id="filterAdmin" class="w-4 h-4 text-[#0a2d63]" value="admin" onchange="applyFilters()">
-                            <label for="filterAdmin" class="text-sm text-gray-700 cursor-pointer">Admin</label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="filter-section bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200">
-                    <h4 class="text-sm font-semibold text-[#0a2d63] mb-3">Filter by Grade Level</h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="form-group">
-                            <select id="filterGradeLevel" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onchange="updateFilterSections(); applyFilters();">
-                                <option value="">All Grade Levels</option>
-                                <option value="Grade 7">Grade 7</option>
-                                <option value="Grade 8">Grade 8</option>
-                                <option value="Grade 9">Grade 9</option>
-                                <option value="Grade 10">Grade 10</option>
-                                <option value="Grade 11">Grade 11</option>
-                                <option value="Grade 12">Grade 12</option>
-                            </select>
-                        </div>
-                        <div id="filterSectionContainer" class="hidden form-group">
-                            <select id="filterSection" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onchange="applyFilters()">
-                                <option value="">All Sections</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="filter-section bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200">
-                    <h4 class="text-sm font-semibold text-[#0a2d63] mb-3">Sort By</h4>
-                    <div class="sort-options flex gap-2 flex-wrap">
-                        <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition active" onclick="setSort('name')" id="sort-name">Name</span>
-                        <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setSort('role')" id="sort-role">Role</span>
-                        <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setSort('grade')" id="sort-grade">Grade Level</span>
-                        <span class="sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setSort('date')" id="sort-date">Date Joined</span>
-                    </div>
-                </div>
-
-                <div id="searchResults" class="search-results min-h-[200px] border border-gray-200 rounded">
-                    <div class="text-center p-10 text-gray-500">Start typing to search for users</div>
-                </div>
-            </div>
-            <div class="modal-footer p-4 md:p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right sticky bottom-0 z-10">
-                <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition w-full sm:w-auto" onclick="closeSearchModal()">Close</button>
             </div>
         </div>
     </div>

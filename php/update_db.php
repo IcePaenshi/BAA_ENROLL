@@ -75,6 +75,30 @@ try {
     
     echo "✅ Created payables table<br>";
     
+    // Create attendance table if not exists
+    $pdo->exec("CREATE TABLE IF NOT EXISTS attendance (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id INT NOT NULL,
+        teacher_id INT NOT NULL,
+        date DATE NOT NULL,
+        status ENUM('present', 'absent', 'late') NOT NULL,
+        encoded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_attendance (student_id, date)
+    )");
+    
+    echo "✅ Created attendance table<br>";
+    
+    // Check if teacher_id column exists, if not add it
+    $stmt = $pdo->query("DESCRIBE attendance");
+    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('teacher_id', $columns)) {
+        $pdo->exec("ALTER TABLE attendance ADD COLUMN teacher_id INT NOT NULL AFTER student_id");
+        $pdo->exec("ALTER TABLE attendance ADD CONSTRAINT fk_attendance_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+        echo "✅ Added teacher_id column to attendance table<br>";
+    }
+    
 } catch(PDOException $e) {
     echo "Error: " . $e->getMessage() . "<br>";
 }

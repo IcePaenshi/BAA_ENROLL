@@ -172,8 +172,8 @@ try {
                         continue;
                     }
 
-                    $stmt = $pdo->prepare("INSERT INTO attendance (student_id, date, status, encoded_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE status = ?, encoded_at = NOW()");
-                    $stmt->execute([$student_id, $date, $status, $status]);
+                    $stmt = $pdo->prepare("INSERT INTO attendance (student_id, teacher_id, date, status, encoded_at) VALUES (?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE status = ?, encoded_at = NOW()");
+                    $stmt->execute([$student_id, $userId, $date, $status, $status]);
                 }
                 $pdo->commit();
                 sendJson(['success' => true]);
