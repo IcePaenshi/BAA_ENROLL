@@ -163,6 +163,19 @@ body {
     }
 }
 
+@media (max-width: 768px) {
+    .rotating-images,
+    .rotating-login-images {
+        display: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .login-right {
+        display: none;
+    }
+}
+
 /* Left Side */
 .login-left {
     padding: 60px 50px;
@@ -1447,6 +1460,20 @@ body {
 }
 
 @media (max-width: 768px) {
+    .login-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+    }
+
+    .login-right {
+        display: none;
+    }
+
+    .login-left {
+        max-height: 100vh;
+        border-bottom: none;
+    }
+
     /* Landing Page */
     .landing-header {
         padding: 15px 20px;

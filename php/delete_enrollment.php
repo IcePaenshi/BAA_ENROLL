@@ -35,9 +35,13 @@ if (!$enrollmentId || !is_numeric($enrollmentId)) {
 }
 
 try {
+    $pdo->beginTransaction();
+
     // Get enrollment info to find the directory
     $stmt = $pdo->prepare("
-        SELECT id, full_name 
+        SELECT 
+            id,
+            CONCAT_WS(' ', first_name, middle_name, last_name, suffix) AS full_name
         FROM enrollments 
         WHERE id = ?
     ");
@@ -56,6 +60,17 @@ try {
         WHERE enrollment_id = ?
     ");
     $deleteDocsStmt->execute([$enrollmentId]);
+
+    // Delete dependent payment/reason rows when tables exist
+    $dependentTables = ['enrollment_downpayments', 'enrollment_rejection_reasons'];
+    foreach ($dependentTables as $tableName) {
+        $existsStmt = $pdo->prepare("SHOW TABLES LIKE ?");
+        $existsStmt->execute([$tableName]);
+        if ($existsStmt->fetchColumn()) {
+            $deleteDepStmt = $pdo->prepare("DELETE FROM `$tableName` WHERE enrollment_id = ?");
+            $deleteDepStmt->execute([$enrollmentId]);
+        }
+    }
     
     // Delete enrollment from database
     $deleteEnrollStmt = $pdo->prepare("
@@ -63,6 +78,7 @@ try {
         WHERE id = ?
     ");
     $deleteEnrollStmt->execute([$enrollmentId]);
+    $pdo->commit();
     
     // Delete the enrollment directory and files
     $enrollmentDir = __DIR__ . '/../enrollments';
@@ -100,9 +116,12 @@ try {
     exit();
     
 } catch(Exception $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log("Error deleting enrollment: " . $e->getMessage());
     ob_end_clean();
-    echo json_encode(['success' => false, 'message' => 'Error deleting enrollment']);
+    echo json_encode(['success' => false, 'message' => 'Error deleting enrollment: ' . $e->getMessage()]);
     exit();
 }
 ?>

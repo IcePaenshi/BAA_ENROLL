@@ -185,7 +185,7 @@ try {
 }
 
 // Verify reCAPTCHA
-$recaptchaSecret = '6LfPGrAsAAAAAOKpRAWX73LSBsf0IgKBG0HAW06D';
+$recaptchaSecret = '6LcmXtAsAAAAAIyFokghJxVu3BN5EE862WbVfF4E';
 $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
 
 if (empty($recaptchaResponse)) {

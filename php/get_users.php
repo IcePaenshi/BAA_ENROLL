@@ -21,6 +21,8 @@ $search = $requestData['search'] ?? '';
 $role = $requestData['role'] ?? '';
 $userId = $requestData['user_id'] ?? '';
 $limit = $requestData['limit'] ?? null;
+$gradeFilter = $requestData['grade_filter'] ?? '';
+$sectionFilter = $requestData['section_filter'] ?? '';
 
 $sessionRole = $_SESSION['role'];
 
@@ -43,7 +45,9 @@ $selectCols = "
     gender,
     birthdate,
     phone,
-    strand
+    strand,
+    teacher_grade_level,
+    teacher_section
 ";
 
 try {
@@ -79,6 +83,16 @@ try {
         if (!empty($role)) {
             $whereConditions[] = 'role = ?';
             $params[] = $role;
+        }
+
+        if (!empty($gradeFilter)) {
+            $whereConditions[] = 'grade_level = ?';
+            $params[] = $gradeFilter;
+        }
+
+        if (!empty($sectionFilter)) {
+            $whereConditions[] = 'section = ?';
+            $params[] = $sectionFilter;
         }
 
         $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';

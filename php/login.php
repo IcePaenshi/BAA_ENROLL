@@ -23,6 +23,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit();
             }
 
+            // [MODIFIED] Check if they used the default password for first time forced change
+            if ($password === 'baa123' && password_verify('baa123', $user['password'])) {
+                $_SESSION['require_password_change'] = true;
+            } else {
+                $_SESSION['require_password_change'] = false;
+            }
+
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['email'] = $user['email'] ?? '';

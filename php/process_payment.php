@@ -16,13 +16,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
+$paymentTarget = $_POST['payment_target'] ?? 'student';
 $studentId = $_POST['student_id'] ?? '';
+$enrollmentId = $_POST['enrollment_id'] ?? '';
 $amount = $_POST['amount'] ?? '';
 $paymentDate = $_POST['payment_date'] ?? date('Y-m-d');
 
-if (!$studentId || !is_numeric($studentId)) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Invalid student ID']);
+if (!in_array($paymentTarget, ['student', 'enrollee'], true)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid payment target']);
     exit();
 }
 
@@ -33,6 +34,58 @@ if (!is_numeric($amount) || $amount <= 0) {
 }
 
 try {
+    if ($paymentTarget === 'enrollee') {
+        if (!$enrollmentId || !is_numeric($enrollmentId)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid enrollment ID']);
+            exit();
+        }
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS enrollment_downpayments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                enrollment_id INT NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                payment_date DATE NOT NULL,
+                processed_by INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_enrollment_id (enrollment_id)
+            )
+        ");
+
+        $check = $pdo->prepare("SELECT id, status FROM enrollments WHERE id = ? LIMIT 1");
+        $check->execute([(int) $enrollmentId]);
+        $enrollment = $check->fetch(PDO::FETCH_ASSOC);
+        if (!$enrollment) {
+            echo json_encode(['success' => false, 'message' => 'Enrollment not found']);
+            exit();
+        }
+        if (($enrollment['status'] ?? '') === 'approved') {
+            echo json_encode(['success' => false, 'message' => 'Enrollment is already approved']);
+            exit();
+        }
+
+        $insert = $pdo->prepare("
+            INSERT INTO enrollment_downpayments (enrollment_id, amount, payment_date, processed_by)
+            VALUES (?, ?, ?, ?)
+        ");
+        $insert->execute([(int) $enrollmentId, (float) $amount, $paymentDate, (int) $_SESSION['user_id']]);
+
+        $sumStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM enrollment_downpayments WHERE enrollment_id = ?");
+        $sumStmt->execute([(int) $enrollmentId]);
+        $total = (float) ($sumStmt->fetchColumn() ?: 0);
+
+        echo json_encode([
+            'success' => true,
+            'message' => '<div style="color: #155724; background: #d4edda; padding: 15px; border-radius: 4px;"><h4 style="margin: 0 0 8px 0;">✓ Downpayment Recorded</h4><p style="margin:0;">Total enrollee downpayment: ₱' . number_format($total, 2) . '</p></div>'
+        ]);
+        exit();
+    }
+
+    if (!$studentId || !is_numeric($studentId)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid student ID']);
+        exit();
+    }
+
     // Start transaction
     $pdo->beginTransaction();
     

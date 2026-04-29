@@ -74,6 +74,35 @@ if (isset($_SESSION['user_id'])) {
             position: relative;
         }
 
+        /* Enrollment processing overlay */
+        #enrollmentLoadingOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.65);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(2px);
+        }
+
+        #enrollmentLoadingOverlay.show {
+            display: flex;
+        }
+
+        .enrollment-spinner {
+            width: 54px;
+            height: 54px;
+            border-radius: 999px;
+            border: 6px solid rgba(34, 197, 94, 0.25);
+            border-top-color: #22c55e;
+            animation: enrollmentSpin 0.85s linear infinite;
+        }
+
+        @keyframes enrollmentSpin {
+            to { transform: rotate(360deg); }
+        }
+
         .enrollment-form-container h2 {
             color: #0a2d63;
             font-size: 28px;
@@ -555,8 +584,19 @@ if (isset($_SESSION['user_id'])) {
         }
 
         @media (max-width: 768px) {
+            .enrollment-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+            }
+
+            .enrollment-right {
+                display: none;
+            }
+
             .enrollment-left {
                 padding: 30px 20px;
+                max-height: 100vh;
+                border-bottom: none;
             }
 
             .enrollment-logo img {
@@ -805,8 +845,8 @@ if (isset($_SESSION['user_id'])) {
                         </div>
                         
                         <!-- Back to Home Button at the bottom of requirements tab -->
-                        <div class="back-to-landing" style="margin-top: 15px;">
-                            <a href="#" onclick="backFromEnrollment(); return false;">← Back to Home</a>
+                        <div class="button-group" style="margin-top: 15px;">
+                            <button type="button" class="back-btn" onclick="backFromEnrollment()" style="width: auto; min-width: 250px;">Back to Home</button>
                         </div>
                     </div>
 
@@ -930,7 +970,7 @@ if (isset($_SESSION['user_id'])) {
                         <!-- Email -->
                         <div class="enroll-input-group">
                             <label for="enrollEmail">Email Address *</label>
-                            <input type="email" id="enrollEmail" name="email" required placeholder="Enter your email">
+                            <input type="email" id="enrollEmail" name="email" required placeholder="Enter your email" autocomplete="email">
                         </div>
 
                         <!-- Phone Number -->
@@ -954,7 +994,7 @@ if (isset($_SESSION['user_id'])) {
                         </div>
 
                         <div class="enrollment-recaptcha-wrap">
-                            <div class="g-recaptcha" data-sitekey="6LfPGrAsAAAAAFfJ2uvzo9hCORgMlxH8Ju8zsO41"></div>
+                            <div class="g-recaptcha" data-sitekey="6LcmXtAsAAAAAKzJC-IlZ6y8DcmlmkbE3WkCaAeo"></div>
                         </div>
 
                         <div class="button-group">
@@ -967,6 +1007,10 @@ if (isset($_SESSION['user_id'])) {
                         <a href="#" onclick="backFromEnrollment(); return false;">← Back to Home</a>
                     </div>
                 </div>
+            </div>
+
+            <div id="enrollmentLoadingOverlay" aria-hidden="true">
+                <div class="enrollment-spinner" role="status" aria-label="Processing enrollment"></div>
             </div>
 
             <!-- Right Side: Blue Animated Background with Rotating Images -->
@@ -1000,14 +1044,30 @@ if (isset($_SESSION['user_id'])) {
     <script src="js/script.js"></script>
     <script>
         // ========== NAME CAPITALIZATION FEATURE ==========
-        function capitalizeFirstLetter(str) {
-            if (!str) return str;
-            return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+        function capitalizeName(str) {
+            if (!str) return '';
+            const cleaned = String(str).trim().replace(/\s+/g, ' ');
+            if (!cleaned) return '';
+            // Capitalize each word, preserving hyphens/apostrophes (e.g., "anna-marie o'neil")
+            return cleaned
+                .split(' ')
+                .map(part => part
+                    .split(/([-'])/g)
+                    .map(seg => (seg === '-' || seg === "'") ? seg : (seg ? seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase() : ''))
+                    .join('')
+                )
+                .join(' ');
         }
 
         function capitalizeNameField(e) {
             const input = e.target;
-            input.value = capitalizeFirstLetter(input.value);
+            input.value = capitalizeName(input.value);
+        }
+
+        function isValidEmail(email) {
+            const v = String(email || '').trim();
+            // Reasonable email validation (tighter than HTML5 default, but not overly strict)
+            return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(v);
         }
 
         // ========== TOGGLE SWITCH FUNCTIONALITY ==========
@@ -1048,6 +1108,7 @@ if (isset($_SESSION['user_id'])) {
             const birthYear = document.getElementById('birthYear');
             const agreeCheckbox = document.getElementById('agreeTerms');
             const proceedBtn = document.getElementById('proceedBtn');
+            const loadingOverlay = document.getElementById('enrollmentLoadingOverlay');
 
             // ----- Toggle Switch Event Listeners -----
             const studentTypeRadios = document.querySelectorAll('input[name="studentType"]');
@@ -1065,6 +1126,7 @@ if (isset($_SESSION['user_id'])) {
             const firstNameInput = document.getElementById('firstName');
             const middleNameInput = document.getElementById('middleName');
             const lastNameInput = document.getElementById('lastName');
+            const emailInput = document.getElementById('enrollEmail');
             
             if (firstNameInput) {
                 firstNameInput.addEventListener('blur', capitalizeNameField);
@@ -1074,6 +1136,38 @@ if (isset($_SESSION['user_id'])) {
             }
             if (lastNameInput) {
                 lastNameInput.addEventListener('blur', capitalizeNameField);
+            }
+
+            // Email normalization (trim) on blur
+            if (emailInput) {
+                emailInput.addEventListener('blur', (e) => {
+                    e.target.value = String(e.target.value || '').trim();
+                });
+            }
+
+            function showEnrollmentError(message, focusEl = null) {
+                const errorDiv = document.getElementById('enrollmentError');
+                if (errorDiv) {
+                    errorDiv.textContent = message;
+                    errorDiv.classList.add('show');
+                }
+
+                // Scroll to top of the enrollment form area so the error is visible
+                const leftPanel = document.querySelector('.enrollment-left');
+                if (leftPanel) {
+                    leftPanel.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+
+                if (focusEl && typeof focusEl.focus === 'function') {
+                    setTimeout(() => {
+                        try {
+                            focusEl.focus({ preventScroll: true });
+                            focusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } catch (_) {}
+                    }, 50);
+                }
             }
 
             // Enable proceed button when terms are agreed
@@ -1206,69 +1300,70 @@ if (isset($_SESSION['user_id'])) {
                 }
 
                 // Validate first name and last name
-                const firstName = document.getElementById('firstName').value.trim();
-                const lastName = document.getElementById('lastName').value.trim();
+                const firstNameEl = document.getElementById('firstName');
+                const middleNameEl = document.getElementById('middleName');
+                const lastNameEl = document.getElementById('lastName');
+                const emailEl = document.getElementById('enrollEmail');
+
+                const firstName = capitalizeName(firstNameEl?.value);
+                const middleName = capitalizeName(middleNameEl?.value);
+                const lastName = capitalizeName(lastNameEl?.value);
+
+                if (firstNameEl) firstNameEl.value = firstName;
+                if (middleNameEl) middleNameEl.value = middleName;
+                if (lastNameEl) lastNameEl.value = lastName;
                 
                 if (!firstName) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please enter your first name.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please enter your first name.', firstNameEl);
                     return;
                 }
                 
                 if (!lastName) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please enter your last name.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please enter your last name.', lastNameEl);
+                    return;
+                }
+
+                // Validate email
+                const emailValue = String(emailEl?.value || '').trim();
+                if (emailEl) emailEl.value = emailValue;
+                if (!emailValue) {
+                    showEnrollmentError('Please enter your email address.', emailEl);
+                    return;
+                }
+                if (!isValidEmail(emailValue)) {
+                    showEnrollmentError('Please enter a valid email address (example: name@gmail.com).', emailEl);
                     return;
                 }
 
                 // Validate file upload
                 if (fileInput.files.length === 0) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please upload at least one document.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please upload at least one document.', fileInput);
                     return;
                 }
 
                 // Validate grade selection
                 if (!gradeSelect.value) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please select a grade level.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please select a grade level.', gradeSelect);
                     return;
                 }
 
                 // Validate strand for Grades 11-12
                 const selectedGrade = parseInt(gradeSelect.value);
                 if ((selectedGrade === 11 || selectedGrade === 12) && !strandSelect.value) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please select a strand for Senior High School (Grade 11-12).';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please select a strand for Senior High School (Grade 11-12).', strandSelect);
                     return;
                 }
 
                 // Validate birthdate
                 if (!birthYear.value || !birthMonth.value || !birthDay.value) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please complete the birthdate fields.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please complete the birthdate fields.', birthMonth);
                     return;
                 }
 
                 // Validate file sizes
                 for (let file of fileInput.files) {
                     if (file.size > 5 * 1024 * 1024) {
-                        if (errorDiv) {
-                            errorDiv.textContent = 'Each file must be less than 5MB.';
-                            errorDiv.classList.add('show');
-                        }
+                        showEnrollmentError('Each file must be less than 5MB.', fileInput);
                         return;
                     }
                 }
@@ -1276,24 +1371,17 @@ if (isset($_SESSION['user_id'])) {
                 // Validate phone number format
                 const phone = phoneInput.value;
                 if (phone.length !== 10) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Phone number must be 10 digits.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Phone number must be 10 digits.', phoneInput);
                     return;
                 }
 
                 const recaptchaToken = typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : '';
                 if (!recaptchaToken) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please complete the reCAPTCHA.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please complete the reCAPTCHA.');
                     return;
                 }
 
                 // Combine name fields into full name for submission
-                const middleName = document.getElementById('middleName').value.trim();
                 const suffix = document.getElementById('suffix').value;
                 
                 let fullName = `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`;
@@ -1328,6 +1416,10 @@ if (isset($_SESSION['user_id'])) {
                 formData.append('g-recaptcha-response', recaptchaToken);
 
                 try {
+                    const submitBtn = enrollmentForm.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.disabled = true;
+                    if (loadingOverlay) loadingOverlay.classList.add('show');
+
                     const response = await fetch('php/handle_enrollment.php', {
                         method: 'POST',
                         body: formData
@@ -1355,20 +1447,18 @@ if (isset($_SESSION['user_id'])) {
                         if (typeof grecaptcha !== 'undefined' && grecaptcha.reset) {
                             grecaptcha.reset();
                         }
-                        if (errorDiv) {
-                            errorDiv.textContent = result.message || 'An error occurred. Please try again.';
-                            errorDiv.classList.add('show');
-                        }
+                        showEnrollmentError(result.message || 'An error occurred. Please try again.');
                     }
                 } catch (error) {
                     console.error('Error:', error);
                     if (typeof grecaptcha !== 'undefined' && grecaptcha.reset) {
                         grecaptcha.reset();
                     }
-                    if (errorDiv) {
-                        errorDiv.textContent = 'An error occurred while processing your enrollment. Please try again.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('An error occurred while processing your enrollment. Please try again.');
+                } finally {
+                    const submitBtn = enrollmentForm.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.disabled = false;
+                    if (loadingOverlay) loadingOverlay.classList.remove('show');
                 }
             });
         });
@@ -1386,41 +1476,35 @@ if (isset($_SESSION['user_id'])) {
             
             requirementsList.innerHTML = '';
             
-            // Junior High School Requirements (Grades 7-10)
-            const jhsRequirements = [
-                'PSA Birth Certificate (Original and Photocopy)',
-                '2x2 ID Pictures (2 pieces, white background)',
-                'Report Card / Form 138 (Original) from previous school',
-                'Good Moral Certificate from previous school',
-                'Photocopy of Parent/Guardian Valid ID',
-                'Completed Enrollment Form',
-                'Proof of Payment for Enrollment Fee'
+            // Common required documents for all grade levels (7-12)
+            const commonRequirements = [
+                'Accomplished Application Form',
+                'Accomplished ESC Application Form',
+                'PSA Birth Certificate (Original Copy)',
+                'Report Card SF9 (Original Copy)',
+                'Certificate of Good Moral Standing (Original Copy)',
+                'Certificate of Transfer Credentials or Honorable Dismissal (Original copy)',
+                '4 pieces of 2x2 picture with white background'
             ];
             
-            // Senior High School Requirements (Grades 11-12)
-            const shsRequirements = [
-                'PSA Birth Certificate (Original and Photocopy)',
-                '2x2 ID Pictures (2 pieces, white background)',
-                'Report Card / Form 138 (Original) from Junior High School',
-                'Certificate of Completion from Grade 10',
-                'Good Moral Certificate from Junior High School',
-                'ESC Certificate (if applicable)',
-                'Voucher Certificate (if applicable)',
-                'Photocopy of Parent/Guardian Valid ID',
-                'Completed Enrollment Form',
-                'Proof of Payment for Enrollment Fee',
-                'Choice of Strand (STEM, ABM, HUMSS)'
-            ];
-            
-            let requirements = [];
+            let requirements = [...commonRequirements];
             let gradeText = '';
+            const parsedGrade = parseInt(gradeLevel, 10);
             
-            if (gradeLevel >= 7 && gradeLevel <= 10) {
-                requirements = jhsRequirements;
-                gradeText = 'Junior High School (Grade ' + gradeLevel + ')';
-            } else if (gradeLevel >= 11 && gradeLevel <= 12) {
-                requirements = shsRequirements;
-                gradeText = 'Senior High School (Grade ' + gradeLevel + ')';
+            // Grade-specific requirements
+            if (parsedGrade === 7) {
+                requirements.push('Diploma (for JHS Grade 7 Applicants) (Photocopy)');
+                requirements.push('Parents Proof of Income (for Grade 7 ESC Grant Applicants)');
+            }
+            
+            if (parsedGrade === 11) {
+                requirements.push('Certificate of Completion (for SHS Grade 11 Applicants) (Photocopy)');
+            }
+            
+            if (parsedGrade >= 7 && parsedGrade <= 10) {
+                gradeText = 'Junior High School (Grade ' + parsedGrade + ')';
+            } else if (parsedGrade >= 11 && parsedGrade <= 12) {
+                gradeText = 'Senior High School (Grade ' + parsedGrade + ')';
             }
             
             requirements.forEach(req => {
@@ -1651,6 +1735,17 @@ if (isset($_SESSION['user_id'])) {
             if (enrollmentPage) enrollmentPage.style.display = 'none';
             if (dashboardPage) dashboardPage.style.display = 'none';
         }
+
+        // If the page is loaded with a login error, keep user on login page
+        (function ensureLoginVisibleOnError() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (params.has('error')) {
+                    showLogin();
+                    window.scrollTo({ top: 0, behavior: 'auto' });
+                }
+            } catch (_) {}
+        })();
     </script>
 </body>
 </html>

@@ -353,11 +353,41 @@ function handleUpdateTeacherSubjects() {
 
     $teacherId = $_POST['teacher_id'] ?? '';
     $subjectIds = $_POST['subject_ids'] ?? [];
+    $teacherGradeLevel = trim((string) ($_POST['teacher_grade_level'] ?? ''));
+    $teacherSection = trim((string) ($_POST['teacher_section'] ?? ''));
 
     if (empty($teacherId)) {
         ob_end_clean();
         echo json_encode(['success' => false, 'message' => 'Missing teacher ID']);
         exit();
+    }
+
+    $gradeSections = [
+        'Grade 7' => ['Love', 'Joy'],
+        'Grade 8' => ['Patience', 'Peace'],
+        'Grade 9' => ['Goodness', 'Kindness'],
+        'Grade 10' => ['Gentleness', 'Faithfulness'],
+        'Grade 11' => ['Self-Control', 'Honesty'],
+        'Grade 12' => ['Humility', 'Meekness'],
+    ];
+
+    if (($teacherGradeLevel === '' && $teacherSection !== '') || ($teacherGradeLevel !== '' && $teacherSection === '')) {
+        ob_end_clean();
+        echo json_encode(['success' => false, 'message' => 'Please select both teacher grade level and section']);
+        exit();
+    }
+
+    if ($teacherGradeLevel !== '') {
+        if (!array_key_exists($teacherGradeLevel, $gradeSections)) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Invalid teacher grade level']);
+            exit();
+        }
+        if (!in_array($teacherSection, $gradeSections[$teacherGradeLevel], true)) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Invalid teacher section for selected grade']);
+            exit();
+        }
     }
 
     // Ensure subject_ids is an array
@@ -400,6 +430,11 @@ function handleUpdateTeacherSubjects() {
                 $stmt->execute([$teacherId, $subjectId]);
             }
         }
+
+        $teacherGradeLevelDb = $teacherGradeLevel !== '' ? $teacherGradeLevel : null;
+        $teacherSectionDb = $teacherSection !== '' ? $teacherSection : null;
+        $updateTeacherStmt = $pdo->prepare("UPDATE users SET teacher_grade_level = ?, teacher_section = ? WHERE id = ? AND role = 'teacher'");
+        $updateTeacherStmt->execute([$teacherGradeLevelDb, $teacherSectionDb, $teacherId]);
 
         $pdo->commit();
 

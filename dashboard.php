@@ -314,11 +314,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
     
     if ($action === 'search_students') {
+        // Check permissions – include admin, registrar, cashier
+        if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'registrar', 'cashier'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+            exit();
+        }
+        
         $search = $_POST['search'] ?? '';
         $grade_filter = $_POST['grade_filter'] ?? '';
         $section_filter = $_POST['section_filter'] ?? '';
         $per_page = (int)($_POST['per_page'] ?? 10);
-        $page = (int)($_POST['page'] ?? 1);
+        if ($per_page < 1) {
+            $per_page = 10;
+        } elseif ($per_page > 100) {
+            $per_page = 100;
+        }
+        $page = max(1, (int)($_POST['page'] ?? 1));
         $offset = ($page - 1) * $per_page;
         
         $conditions = [];
@@ -350,14 +361,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $stmt->execute($params);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Fetch grades for these students
-        foreach ($students as &$s) {
-            $gStmt = $pdo->prepare("SELECT s.subject_name, g.grade, g.quarter FROM grades g JOIN subjects s ON g.subject_id = s.id WHERE g.student_id = ?");
-            $gStmt->execute([$s['id']]);
-            $s['grades'] = $gStmt->fetchAll(PDO::FETCH_ASSOC);
-        }
-        
-        $total_pages = ceil($total / $per_page);
+        $total_pages = max(1, (int) ceil($total / $per_page));
         
         echo json_encode(['success' => true, 'students' => $students, 'total_pages' => $total_pages, 'page' => $page]);
         exit;
@@ -607,6 +611,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         let totalEnrollments = <?php echo json_encode($totalEnrollments ?? 0, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         let currentUserId = <?php echo json_encode($userId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         let userRole = <?php echo json_encode($userRole, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+        const canDeleteEnrollment = <?php echo json_encode(in_array($userRole, ['admin', 'super_admin'], true), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         let teacherSelectedStudentId = null;
         let teacherHomeStudents = <?php echo json_encode($allTeacherStudents, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         let teacherHomeGrades = <?php echo json_encode($studentGrades, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -780,15 +785,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <td>
                             <div class="action-btn-group">
                                 <button class="action-btn btn-accept" onclick="acceptEnrollment(${enrollment.id})">Accept</button>
-                                <button class="action-btn btn-docs" onclick="updateStatus(${enrollment.id}, 'needs_docs')">Docs</button>
-                                <button class="action-btn btn-reject" onclick="updateStatus(${enrollment.id}, 'rejected')">Reject</button>
+                                <button class="action-btn btn-reject" onclick="openRejectEnrollmentModalById(${enrollment.id})">Reject</button>
                             </div>
                         </td>
                         <td>
                             <button class="three-dots" onclick="toggleDetails(${enrollment.id})">⋮</button>
                         </td>
                         <td>
-                            <button class="delete-btn" onclick="deleteEnrollment(${enrollment.id}, '${enrollment.full_name}')" title="Delete enrollment">✕</button>
+                            ${canDeleteEnrollment ? `<button class="delete-btn" onclick="deleteEnrollment(${enrollment.id}, '${enrollment.full_name}')" title="Delete enrollment">✕</button>` : ''}
                         </td>
                     </tr>
                     <tr id="details-${enrollment.id}" class="details-row hidden">
@@ -800,6 +804,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                     <div><span class="font-semibold">Birthdate:</span> ${enrollment.birthdate}</div>
                                     <div><span class="font-semibold">Phone:</span> ${phone}</div>
                                     <div><span class="font-semibold">Grade:</span> ${enrollment.grade_level}</div>
+                                    <div><span class="font-semibold">Downpayment:</span> ₱${parseFloat(enrollment.downpayment_total || 0).toFixed(2)}</div>
                                     <div><span class="font-semibold">Section:</span> ${enrollment.section}</div>
                                     <div><span class="font-semibold">LRN:</span> ${enrollment.lrn}</div>
                                     <div><span class="font-semibold">Submitted:</span> ${created}</div>
@@ -941,10 +946,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         // ---------- Payables Calculation ----------
-        function calculatePayables() {
+        async function calculatePayables() {
             const studentId = document.getElementById('studentSelect')?.value;
-            const tuitionFee = parseFloat(document.getElementById('tuitionFee')?.value);
-            const downPayment = parseFloat(document.getElementById('downPayment')?.value);
+            const tuitionInput = document.getElementById('tuitionFee');
+            const downInput = document.getElementById('downPayment');
+            let tuitionFee = parseFloat(tuitionInput?.value);
+            let downPayment = parseFloat(downInput?.value);
             const discounts = parseFloat(document.getElementById('discounts')?.value) || 0;
             const monthlyPayments = parseInt(document.getElementById('monthlyPayments')?.value) || 4;
             
@@ -953,15 +960,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 return;
             }
             
+            // If not manually provided, auto-load from current student totals
+            if (!(tuitionFee > 0) || Number.isNaN(downPayment)) {
+                try {
+                    const resp = await fetch('php/get_student_payables.php?student_id=' + studentId);
+                    const data = await parseJsonResponse(resp);
+                    if (data?.success && data?.totals) {
+                        if (!(tuitionFee > 0)) {
+                            tuitionFee = parseFloat(data.totals.fee_total || 0);
+                            if (tuitionInput && tuitionFee > 0) tuitionInput.value = tuitionFee.toFixed(2);
+                        }
+                        if (Number.isNaN(downPayment)) {
+                            downPayment = parseFloat(data.totals.downpayment_total || 0);
+                            if (downInput) downInput.value = (downPayment || 0).toFixed(2);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to auto-load payables totals:', e);
+                }
+            }
+
             if (!tuitionFee || tuitionFee <= 0) {
-                alert('Please enter a valid tuition fee');
+                alert('Unable to calculate: no total fees found for this student yet.');
                 return;
             }
-            
-            if (!downPayment || downPayment < 0) {
-                alert('Please enter a valid down payment');
-                return;
-            }
+
+            if (Number.isNaN(downPayment) || downPayment < 0) downPayment = 0;
             
             if (downPayment > tuitionFee) {
                 alert('Down payment cannot be greater than tuition fee');
@@ -1125,7 +1149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         function loadStudentPayables() {
-            const studentId = document.getElementById('paymentStudentSelect')?.value;
+            const studentId = document.getElementById('paymentStudentId')?.value;
             if (!studentId || studentId === "") {
                 alert('Please select a student first');
                 return;
@@ -1136,12 +1160,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             payablesList.innerHTML = '<div class="loading text-center text-gray-500 py-10">Loading payables...</div>';
             const studentPayablesDiv = document.getElementById('studentPayables');
             if (studentPayablesDiv) studentPayablesDiv.style.display = 'block';
+
+            const totalsDiv = document.getElementById('payablesTotals');
+            if (totalsDiv) totalsDiv.innerHTML = '';
             
             fetch('php/get_student_payables.php?student_id=' + studentId)
                 .then(parseJsonResponse)
                 .then(data => {
                     if (data.success && data.payables) {
-                        displayStudentPayables(data.payables);
+                        displayStudentPayables(data.payables, data.totals || null);
                     } else {
                         payablesList.innerHTML = '<div class="text-center text-gray-500 py-10">No payables found for this student.</div>';
                     }
@@ -1152,58 +1179,329 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 });
         }
 
-        function displayStudentPayables(payables) {
+        function displayStudentPayables(payables, totals = null) {
             const payablesList = document.getElementById('payablesList');
             if (!payablesList) return;
-            
-            if (payables.length === 0) {
-                payablesList.innerHTML = '<div class="text-center text-gray-500 py-10">No payables found for this student.</div>';
-                return;
+            const totalsDiv = document.getElementById('payablesTotals');
+            if (totalsDiv && totals) {
+                const fmt = (n) => '₱' + (parseFloat(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                totalsDiv.innerHTML = `
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        <div class="p-4 bg-white border border-gray-200 rounded">
+                            <div class="text-xs font-semibold text-gray-500">Grade</div>
+                            <div class="text-sm font-bold text-[#0a2d63]">${escapeHtml(String(totals.grade_level || '-'))}</div>
+                        </div>
+                        <div class="p-4 bg-white border border-gray-200 rounded">
+                            <div class="text-xs font-semibold text-gray-500">Total Fees</div>
+                            <div class="text-sm font-bold text-[#0a2d63]">${fmt(totals.fee_total)}</div>
+                        </div>
+                        <div class="p-4 bg-white border border-gray-200 rounded">
+                            <div class="text-xs font-semibold text-gray-500">Downpayment</div>
+                            <div class="text-sm font-bold text-green-700">${fmt(totals.downpayment_total)}</div>
+                        </div>
+                        <div class="p-4 bg-white border border-gray-200 rounded">
+                            <div class="text-xs font-semibold text-gray-500">Other Payments</div>
+                            <div class="text-sm font-bold text-green-700">${fmt(totals.total_paid)}</div>
+                        </div>
+                        <div class="p-4 bg-white border border-gray-200 rounded">
+                            <div class="text-xs font-semibold text-gray-500">Remaining Due</div>
+                            <div class="text-sm font-bold text-red-700">${fmt(totals.remaining_due)}</div>
+                        </div>
+                    </div>
+                `;
             }
-            
-            let html = '<div class="payables-grid grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">';
-            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Description</div>';
-            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Amount</div>';
-            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Due Date</div>';
-            html += '<div class="payables-header font-semibold text-gray-700 pb-2 border-b-2 border-gray-300 mb-2">Status</div>';
-            
+            payablesList.innerHTML = renderAdminPayablesTable(payables);
+        }
+
+        function getPayableStatusMeta(payable) {
+            const dueDate = new Date(payable.due_date);
+            const today = new Date();
+            let status = String(payable.status || 'pending').toLowerCase();
+            let statusClass = 'bg-yellow-100 text-yellow-800';
+            let statusText = 'Pending';
+
+            if (status === 'paid') {
+                statusClass = 'bg-green-100 text-green-800';
+                statusText = 'Paid';
+            } else if (status === 'partially_paid') {
+                statusClass = 'bg-blue-100 text-blue-800';
+                statusText = 'Partially Paid';
+            } else if (dueDate < today) {
+                statusClass = 'bg-red-100 text-red-800';
+                statusText = 'Overdue';
+            }
+
+            return { dueDate, statusClass, statusText };
+        }
+
+        function renderAdminPayablesTable(payables) {
+            if (!Array.isArray(payables) || payables.length === 0) {
+                return '<div class="text-center text-gray-500 py-10">No payables found.</div>';
+            }
+
+            let html = `
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse bg-white shadow-sm rounded min-w-[600px] md:min-w-full">
+                        <thead class="bg-[#0a2d63] text-white">
+                            <tr>
+                                <th class="p-4 text-left font-semibold">Description</th>
+                                <th class="p-4 text-right font-semibold">Amount</th>
+                                <th class="p-4 text-left font-semibold">Due Date</th>
+                                <th class="p-4 text-center font-semibold">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
             payables.forEach(payable => {
-                const dueDate = new Date(payable.due_date);
-                const today = new Date();
-                const isOverdue = dueDate < today && payable.status !== 'paid';
-                let statusClass = 'bg-yellow-100 text-yellow-800';
-                let statusText = 'Pending';
-                
-                if (payable.status === 'paid') {
-                    statusClass = 'bg-green-100 text-green-800';
-                    statusText = 'Paid';
-                } else if (isOverdue) {
-                    statusClass = 'bg-red-100 text-red-800';
-                    statusText = 'Overdue';
-                }
-                
+                const { dueDate, statusClass, statusText } = getPayableStatusMeta(payable);
+                const description = payable.item_name || payable.description || 'Tuition Fee';
                 html += `
-                    <div class="payables-row contents">
-                        <div class="py-3 border-b border-gray-200" data-label="Description">${payable.item_name}</div>
-                        <div class="py-3 border-b border-gray-200" data-label="Amount">₱${parseFloat(payable.amount).toFixed(2)}</div>
-                        <div class="py-3 border-b border-gray-200" data-label="Due Date">${dueDate.toLocaleDateString()}</div>
-                        <div class="py-3 border-b border-gray-200" data-label="Status"><span class="px-3 py-1 rounded text-xs font-semibold ${statusClass}">${statusText}</span></div>
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="p-4 text-gray-800">${description}</td>
+                        <td class="p-4 text-right font-semibold text-[#0a2d63]">₱${parseFloat(payable.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td class="p-4 text-gray-700">${dueDate.toLocaleDateString()}</td>
+                        <td class="p-4 text-center"><span class="px-3 py-1 rounded text-xs font-semibold ${statusClass}">${statusText}</span></td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            return html;
+        }
+
+        // ---------- Tuition Fee Manager ----------
+        let tuitionFeeManagerData = null;
+        let tuitionFeeManagerDefaults = null;
+
+        function loadTuitionFeeManager() {
+            const statusEl = document.getElementById('tuitionFeeManagerStatus');
+            const tableEl = document.getElementById('tuitionFeeManagerTable');
+            if (statusEl) statusEl.innerHTML = '<div class="text-gray-600">Loading fee table...</div>';
+            if (tableEl) tableEl.innerHTML = '';
+
+            fetch('php/get_tuition_fees.php')
+                .then(parseJsonResponse)
+                .then(data => {
+                    if (!data.success) throw new Error(data.message || 'Failed to load fees');
+                    tuitionFeeManagerData = data.fees || {};
+                    tuitionFeeManagerDefaults = data.defaults || {};
+                    renderTuitionFeeManagerTable();
+                    if (statusEl) statusEl.innerHTML = '<div class="text-green-700 font-medium">Loaded.</div>';
+                })
+                .catch(err => {
+                    console.error(err);
+                    if (statusEl) statusEl.innerHTML = '<div class="text-red-700 font-medium">Error loading fees.</div>';
+                });
+        }
+
+        function feeTotal(b) {
+            const v = (k) => parseFloat((b && b[k] != null) ? b[k] : 0) || 0;
+            return v('tuition') + v('misc') + v('aircon') + v('hsa') + v('books');
+        }
+
+        function renderTuitionFeeManagerTable() {
+            const tableEl = document.getElementById('tuitionFeeManagerTable');
+            if (!tableEl) return;
+
+            const grades = ['Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12'];
+            let html = `
+                <table class="w-full border-collapse bg-white shadow-sm rounded min-w-[900px]">
+                    <thead class="bg-[#0a2d63] text-white">
+                        <tr>
+                            <th class="p-3 text-left font-semibold">Grade</th>
+                            <th class="p-3 text-right font-semibold">Tuition</th>
+                            <th class="p-3 text-right font-semibold">Misc</th>
+                            <th class="p-3 text-right font-semibold">Aircon</th>
+                            <th class="p-3 text-right font-semibold">HSA</th>
+                            <th class="p-3 text-right font-semibold">Books</th>
+                            <th class="p-3 text-right font-semibold">Total</th>
+                            <th class="p-3 text-center font-semibold">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            const fmt = (n) => (parseFloat(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            grades.forEach(g => {
+                const b = tuitionFeeManagerData?.[g] || { tuition: 0, misc: 0, aircon: 0, hsa: 0, books: 0 };
+                const total = feeTotal(b);
+                html += `
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="p-3 font-semibold text-gray-800">${escapeHtml(g)}</td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_tuition" value="${b.tuition}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_misc" value="${b.misc}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_aircon" value="${b.aircon}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_hsa" value="${b.hsa}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_books" value="${b.books}"></td>
+                        <td class="p-3 text-right font-bold text-[#0a2d63]">₱${fmt(total)}</td>
+                        <td class="p-3 text-center">
+                            <div class="flex flex-col sm:flex-row gap-2 justify-center">
+                                <button type="button" class="px-3 py-2 rounded bg-green-600 text-white font-medium hover:bg-green-700 transition" onclick="saveTuitionFeeRow('${g}')">Save</button>
+                                <button type="button" class="px-3 py-2 rounded border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-100 transition" onclick="resetTuitionFeeRow('${g}')">Reset</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            tableEl.innerHTML = html;
+        }
+
+        function readFeeRow(grade) {
+            const get = (k) => parseFloat(document.getElementById(`fee_${grade}_${k}`)?.value || '0') || 0;
+            return { tuition: get('tuition'), misc: get('misc'), aircon: get('aircon'), hsa: get('hsa'), books: get('books') };
+        }
+
+        function saveTuitionFeeRow(grade) {
+            const b = readFeeRow(grade);
+            const confirmMsg = `This will change tuition fees for ALL existing and upcoming ${grade} students (unpaid fees will be updated). Continue?`;
+            if (!confirm(confirmMsg)) return;
+
+            const statusEl = document.getElementById('tuitionFeeManagerStatus');
+            if (statusEl) statusEl.innerHTML = '<div class="text-gray-600">Saving...</div>';
+
+            const fd = new FormData();
+            fd.append('grade_level', grade);
+            fd.append('tuition', b.tuition.toFixed(2));
+            fd.append('misc', b.misc.toFixed(2));
+            fd.append('aircon', b.aircon.toFixed(2));
+            fd.append('hsa', b.hsa.toFixed(2));
+            fd.append('books', b.books.toFixed(2));
+
+            fetch('php/set_tuition_fee.php', { method: 'POST', body: fd })
+                .then(parseJsonResponse)
+                .then(data => {
+                    if (!data.success) throw new Error(data.message || 'Save failed');
+                    if (tuitionFeeManagerData) tuitionFeeManagerData[grade] = b;
+                    renderTuitionFeeManagerTable();
+                    if (statusEl) statusEl.innerHTML = '<div class="text-green-700 font-medium">Saved.</div>';
+                })
+                .catch(err => {
+                    console.error(err);
+                    if (statusEl) statusEl.innerHTML = '<div class="text-red-700 font-medium">Error: ' + escapeHtml(String(err.message || err)) + '</div>';
+                });
+        }
+
+        function resetTuitionFeeRow(grade) {
+            const confirmMsg = `Reset ${grade} fees back to the original/default values? This will also update unpaid fees for existing ${grade} students.`;
+            if (!confirm(confirmMsg)) return;
+            const statusEl = document.getElementById('tuitionFeeManagerStatus');
+            if (statusEl) statusEl.innerHTML = '<div class="text-gray-600">Resetting...</div>';
+
+            const fd = new FormData();
+            fd.append('grade_level', grade);
+            fetch('php/reset_tuition_fee.php', { method: 'POST', body: fd })
+                .then(parseJsonResponse)
+                .then(data => {
+                    if (!data.success) throw new Error(data.message || 'Reset failed');
+                    // Reload to ensure latest values
+                    loadTuitionFeeManager();
+                })
+                .catch(err => {
+                    console.error(err);
+                    if (statusEl) statusEl.innerHTML = '<div class="text-red-700 font-medium">Error: ' + escapeHtml(String(err.message || err)) + '</div>';
+                });
+        }
+
+        function renderStudentPayablesTable(payables, totals = null) {
+            if (!Array.isArray(payables) || payables.length === 0) {
+                return '<div class="text-center text-gray-500 py-10">No payables found.</div>';
+            }
+
+            let html = `
+                <div class="bg-gray-100 border border-gray-200 rounded">
+                    <div class="px-4 py-3 border-b border-gray-300">
+                        <h4 class="text-2xl font-semibold text-[#0a2d63] mb-1">Payments and Adjustments</h4>
+                        <p class="text-gray-600 text-sm">Detailed payable breakdown and running balance.</p>
+                    </div>
+                    <div class="p-4 space-y-3">
+            `;
+
+            payables.forEach(payable => {
+                const { dueDate, statusClass, statusText } = getPayableStatusMeta(payable);
+                const description = payable.item_name || payable.description || 'Tuition Fee';
+                html += `
+                    <div class="border border-gray-200 bg-white rounded overflow-hidden">
+                        <div class="bg-gray-200 px-4 py-2 text-gray-700 font-semibold text-sm">
+                            ${dueDate.toLocaleDateString()} | ${description}
+                        </div>
+                        <div class="px-4 py-3 flex justify-between items-center border-b border-gray-100">
+                            <span class="text-gray-700">Amount</span>
+                            <span class="font-semibold text-gray-800">₱${parseFloat(payable.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div class="px-4 py-3 flex justify-between items-center">
+                            <span class="text-gray-700">Status</span>
+                            <span class="px-3 py-1 rounded text-xs font-semibold ${statusClass}">${statusText}</span>
+                        </div>
                     </div>
                 `;
             });
-            
-            html += '</div>';
-            payablesList.innerHTML = html;
+
+            html += '</div></div>';
+
+            if (totals) {
+                const totalTuition = parseFloat((totals.fee_total ?? totals.total_tuition_fee) || 0);
+                const downpayment = parseFloat(totals.downpayment_total || 0);
+                const otherPayments = parseFloat(totals.total_paid || 0);
+                const totalReduced = parseFloat((totals.total_reduced ?? (downpayment + otherPayments)) || 0);
+                const totalToBePaid = parseFloat((totals.total_to_be_paid ?? totals.remaining_due) || 0);
+                html += `
+                    <div class="mt-4 border border-gray-200 rounded overflow-hidden">
+                        <div class="bg-[#0a2d63] text-white px-4 py-3 flex justify-between items-center font-semibold">
+                            <span>Total Payments and Adjustments</span>
+                            <span>₱${totalReduced.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div class="bg-white px-4 py-3 flex justify-between items-center text-sm border-b border-gray-200">
+                            <span class="text-gray-700">Downpayment</span>
+                            <span class="font-semibold text-green-700">₱${downpayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div class="bg-white px-4 py-3 flex justify-between items-center text-sm border-b border-gray-200">
+                            <span class="text-gray-700">Other payments</span>
+                            <span class="font-semibold text-green-700">₱${otherPayments.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div class="bg-yellow-300 px-4 py-3 flex justify-between items-center text-black font-semibold">
+                            <span>Assessment Total Fees</span>
+                            <span>₱${totalTuition.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div class="bg-[#0a2d63] text-white px-4 py-4 flex justify-between items-center text-lg font-bold">
+                            <span>To Be Paid</span>
+                            <span>₱${totalToBePaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return html;
         }
 
         function processPayment() {
-            const studentId = document.getElementById('paymentStudentSelect')?.value;
+            const targetType = document.getElementById('paymentTargetType')?.value || 'student';
+            const studentId = document.getElementById('paymentStudentId')?.value;
+            const enrollmentId = document.getElementById('paymentEnrollmentId')?.value;
             const amount = document.getElementById('paymentAmount')?.value;
             const paymentDate = document.getElementById('paymentDate')?.value;
             
-            if (!studentId || studentId === "") {
-                alert('Please select a student');
-                return;
+            if (targetType === 'student') {
+                if (!studentId || studentId === "") {
+                    alert('Please select a student');
+                    return;
+                }
+            } else {
+                if (!enrollmentId || enrollmentId === "") {
+                    alert('Please select an enrollee');
+                    return;
+                }
             }
             
             if (!amount || parseFloat(amount) <= 0) {
@@ -1212,7 +1510,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             
             const formData = new FormData();
-            formData.append('student_id', studentId);
+            formData.append('payment_target', targetType);
+            formData.append('student_id', studentId || '');
+            formData.append('enrollment_id', enrollmentId || '');
             formData.append('amount', amount);
             formData.append('payment_date', paymentDate);
             
@@ -1230,7 +1530,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
                     const amountInput = document.getElementById('paymentAmount');
                     if (amountInput) amountInput.value = '';
-                    loadStudentPayables();
+                    if (targetType === 'student') {
+                        loadStudentPayables();
+                    } else {
+                        loadPaymentEnrollees();
+                        if (typeof loadEnrollments === 'function') {
+                            loadEnrollments();
+                        }
+                    }
                 } else {
                     alert('Error processing payment: ' + data.message);
                 }
@@ -1309,6 +1616,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if (lrn) {
                 lrn.disabled = !isStudent;
                 lrn.removeAttribute('required');
+                lrn.addEventListener('input', (e) => {
+                    e.target.value = String(e.target.value || '').replace(/[^0-9]/g, '').slice(0, 12);
+                });
             }
             // Age, gender, birthdate, and phone are now always enabled for all users
             const alwaysEnabled = ['modalGender', 'modalBirthdate', 'modalPhone'];
@@ -1581,6 +1891,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             } else if (user.role === 'teacher') {
                 formDiv.innerHTML = '<p class="text-gray-600">No additional fields to edit for teachers.</p>';
                 teacherSection.style.display = 'block';
+                const teacherGrade = document.getElementById('teacherAssignedGrade');
+                if (teacherGrade) {
+                    teacherGrade.value = user.teacher_grade_level || '';
+                }
+                updateTeacherAssignedSections(user.teacher_section || '');
                 loadTeacherSubjects(user.id);
             } else {
                 formDiv.innerHTML = '<p class="text-gray-600">No editable fields for this role.</p>';
@@ -1693,7 +2008,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         function filterSubjectsByGrade() {
             const selectedGrade = document.getElementById('subjectGradeFilter').value;
-            displaySubjectCheckboxes(allTeacherSubjects, teacherSelectedSubjectIds, selectedGrade);
+            const selectedSection = document.getElementById('subjectSectionFilter').value;
+            displaySubjectCheckboxes(allTeacherSubjects, teacherSelectedSubjectIds, selectedGrade, selectedSection);
+            updateSubjectSelectAllButton();
+        }
+
+        function updateSubjectSectionFilter() {
+            const gradeEl = document.getElementById('subjectGradeFilter');
+            const sectionEl = document.getElementById('subjectSectionFilter');
+            if (!gradeEl || !sectionEl) return;
+
+            const grade = gradeEl.value;
+            sectionEl.innerHTML = '<option value="">All Sections</option>';
+            if (!grade) return;
+
+            const sections = getSectionsForGrade(grade);
+            sections.forEach(section => {
+                const option = document.createElement('option');
+                option.value = section;
+                option.textContent = section;
+                sectionEl.appendChild(option);
+            });
+        }
+
+        function updateTeacherAssignedSections(selectedSection = '') {
+            const gradeEl = document.getElementById('teacherAssignedGrade');
+            const sectionEl = document.getElementById('teacherAssignedSection');
+            if (!gradeEl || !sectionEl) return;
+
+            const grade = gradeEl.value;
+            sectionEl.innerHTML = '<option value="">Select Section</option>';
+            if (!grade) return;
+
+            const sections = getSectionsForGrade(grade);
+            sections.forEach(section => {
+                const option = document.createElement('option');
+                option.value = section;
+                option.textContent = section;
+                if (section === selectedSection) option.selected = true;
+                sectionEl.appendChild(option);
+            });
         }
 
         function displaySubjectCheckboxes(subjects, assignedSubjects, filterGrade = '') {
@@ -1726,6 +2080,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 checkboxesDiv.appendChild(checkbox);
             });
             updateSelectedSubjectsSummary();
+            updateSubjectSelectAllButton();
             console.log('Rendered', filteredSubjects.length, 'subject checkboxes');
         }
 
@@ -1733,7 +2088,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             const checkboxes = document.querySelectorAll('#subjectCheckboxes input[type="checkbox"]:checked');
             teacherSelectedSubjectIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
             updateSelectedSubjectsSummary();
+            updateSubjectSelectAllButton();
             console.log('Updated selected subjects:', teacherSelectedSubjectIds);
+        }
+
+        function updateSubjectSelectAllButton() {
+            const btn = document.getElementById('subjectSelectAllBtn');
+            if (!btn) return;
+            const visible = document.querySelectorAll('#subjectCheckboxes input[type="checkbox"]');
+            if (!visible || visible.length === 0) {
+                btn.textContent = 'Select All';
+                btn.disabled = true;
+                btn.classList.add('opacity-60', 'cursor-not-allowed');
+                return;
+            }
+            btn.disabled = false;
+            btn.classList.remove('opacity-60', 'cursor-not-allowed');
+            const allChecked = Array.from(visible).every(cb => cb.checked);
+            btn.textContent = allChecked ? 'Unselect All' : 'Select All';
+        }
+
+        function toggleSelectAllSubjects() {
+            const visible = document.querySelectorAll('#subjectCheckboxes input[type="checkbox"]');
+            if (!visible || visible.length === 0) return;
+            const allChecked = Array.from(visible).every(cb => cb.checked);
+            Array.from(visible).forEach(cb => { cb.checked = !allChecked; });
+            updateTeacherSelectedSubjects();
         }
 
         function updateSelectedSubjectsSummary() {
@@ -1809,13 +2189,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     saveBtn.disabled = false;
                 });
             } else if (userRole === 'teacher') {
+                const teacherAssignedGrade = document.getElementById('teacherAssignedGrade')?.value || '';
+                const teacherAssignedSection = document.getElementById('teacherAssignedSection')?.value || '';
                 fetch('php/handle_user.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'update_teacher_subjects',
                         teacher_id: userId,
-                        subject_ids: teacherSelectedSubjectIds
+                        subject_ids: teacherSelectedSubjectIds,
+                        teacher_grade_level: teacherAssignedGrade,
+                        teacher_section: teacherAssignedSection
                     })
                 })
                 .then(response => response.json())
@@ -2022,26 +2406,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 html += `
                     <div class="border-b border-gray-200 last:border-b-0">
-                        <div class="flex items-center justify-between p-3 md:p-4 hover:bg-gray-50">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 md:p-4 hover:bg-gray-50 gap-y-3">
                             <div class="flex items-center gap-2 flex-1 min-w-0">
                                 <button type="button" class="text-[#0a2d63] font-bold px-1 shrink-0" title="Show details" onclick="event.stopPropagation(); toggleUserDirectoryDetails(${user.id})">▾</button>
                                 <div class="cursor-pointer flex-1 min-w-0" onclick="toggleUserDirectoryDetails(${user.id})">
                                     <div class="font-semibold text-[#0a2d63] truncate">${escapeUserDirHtml(fullName)}</div>
-                                    <div class="text-sm text-gray-600 flex items-center gap-x-2 gap-y-1 mt-0.5">
+                                    <div class="text-sm text-gray-600 flex items-center gap-x-2 gap-y-1 mt-0.5 flex-wrap">
                                         ${gs ? '<span>' + gs + '</span><span>·</span>' : ''}
                                         <span class="px-2 py-0.5 rounded text-xs font-semibold text-white" style="background:${roleColor}">${escapeUserDirHtml(roleDisplay)}</span>
+                                        ${canPromote ? `<button type="button" onclick="promoteStudent(${user.id})" class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-medium hover:bg-green-700 transition">Promote</button>` : ''}
                                     </div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2 shrink-0 ml-2" onclick="event.stopPropagation()">
-                                ${canPromote ? `<button type="button" onclick="promoteStudent(${user.id})" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-green-700 transition">Promote</button>` : ''}
+                            <div class="flex items-center justify-end gap-2 shrink-0 sm:ml-2 ml-8 w-full sm:w-auto overflow-hidden" onclick="event.stopPropagation()">
                                 ${showToggle ? `
-                                    <div class="status-toggle">
+                                    <div class="status-toggle ml-1 overflow-hidden">
                                         <label class="switch">
                                             <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleUserStatus(${user.id}, this.checked)">
                                             <span class="slider"></span>
                                         </label>
-                                        <span class="text-xs ${isActive ? 'text-green-600' : 'text-red-600'} ml-1">${isActive ? 'Active' : 'Inactive'}</span>
+                                        <span class="text-xs ${isActive ? 'text-green-600' : 'text-red-600'} ml-1 whitespace-nowrap">${isActive ? 'Active' : 'Inactive'}</span>
                                     </div>` : ''}
                             </div>
                         </div>
@@ -2410,6 +2794,133 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if (modal) modal.style.display = 'none';
         }
 
+        const REJECTION_REQUIREMENTS = {
+            common: [
+                'Accomplished Application Form',
+                'Accomplished ESC Application Form',
+                'PSA Birth Certificate (Original Copy)',
+                'Report Card SF9 (Original Copy)',
+                'Certificate of Good Moral Standing (Original Copy)',
+                'Certificate of Transfer Credentials or Honorable Dismissal (Original copy)',
+                '4 pieces of 2x2 picture with white background'
+            ],
+            grade7: [
+                'Diploma (for JHS Grade 7 Applicants) (Photocopy)',
+                'Parents Proof of Income (for Grade 7 ESC Grant Applicants)'
+            ],
+            grade11: [
+                'Certificate of Completion (for SHS Grade 11 Applicants) (Photocopy)'
+            ]
+        };
+
+        function getRequiredDocsByGrade(gradeLevel) {
+            const g = String(gradeLevel || '').replace(/[^0-9]/g, '');
+            let docs = [...REJECTION_REQUIREMENTS.common];
+            if (g === '7') docs = docs.concat(REJECTION_REQUIREMENTS.grade7);
+            if (g === '11') docs = docs.concat(REJECTION_REQUIREMENTS.grade11);
+            return docs;
+        }
+
+        function openRejectEnrollmentModalById(enrollmentId) {
+            const enrollment = allEnrollments.find(e => String(e.id) === String(enrollmentId));
+            if (!enrollment) {
+                alert('Enrollment details not found. Please reload the list.');
+                return;
+            }
+            const modal = document.getElementById('rejectEnrollmentModal');
+            if (!modal) return;
+
+            document.getElementById('rejectEnrollmentId').value = enrollment.id;
+            document.getElementById('rejectEnrollmentName').textContent = enrollment.full_name || 'Enrollee';
+            document.getElementById('rejectEnrollmentGrade').textContent = enrollment.grade_level || '-';
+            document.getElementById('rejectReasonDocs').checked = false;
+            document.getElementById('rejectReasonData').checked = false;
+            document.getElementById('rejectCustomMessage').value = '';
+            document.getElementById('rejectReasonError').style.display = 'none';
+            document.getElementById('rejectDocsError').style.display = 'none';
+            document.getElementById('rejectMissingDocsContainer').style.display = 'none';
+
+            const docsWrap = document.getElementById('rejectMissingDocsList');
+            docsWrap.innerHTML = '';
+            const docs = getRequiredDocsByGrade(enrollment.grade_level);
+            docs.forEach((doc, idx) => {
+                const escapedDoc = doc.replace(/"/g, '&quot;');
+                docsWrap.innerHTML += `
+                    <label class="flex items-start gap-2 text-sm text-gray-700">
+                        <input type="checkbox" class="reject-missing-doc w-4 h-4 mt-1" value="${escapedDoc}">
+                        <span>${doc}</span>
+                    </label>
+                `;
+            });
+            modal.style.display = 'flex';
+        }
+
+        function closeRejectEnrollmentModal() {
+            const modal = document.getElementById('rejectEnrollmentModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function toggleMissingDocsBox() {
+            const selected = document.getElementById('rejectReasonDocs')?.checked;
+            const box = document.getElementById('rejectMissingDocsContainer');
+            if (box) box.style.display = selected ? 'block' : 'none';
+        }
+
+        function submitRejectEnrollment() {
+            const enrollmentId = document.getElementById('rejectEnrollmentId')?.value;
+            const reasonDocs = document.getElementById('rejectReasonDocs')?.checked;
+            const reasonData = document.getElementById('rejectReasonData')?.checked;
+            const customMessage = (document.getElementById('rejectCustomMessage')?.value || '').trim();
+            const reasonError = document.getElementById('rejectReasonError');
+            const docsError = document.getElementById('rejectDocsError');
+
+            if (reasonError) reasonError.style.display = 'none';
+            if (docsError) docsError.style.display = 'none';
+
+            if (!reasonDocs && !reasonData) {
+                if (reasonError) reasonError.style.display = 'block';
+                return;
+            }
+
+            const missingDocs = Array.from(document.querySelectorAll('.reject-missing-doc:checked'))
+                .map(el => el.value);
+            if (reasonDocs && missingDocs.length === 0) {
+                if (docsError) docsError.style.display = 'block';
+                return;
+            }
+
+            const reasons = [];
+            if (reasonDocs) reasons.push('lack_of_documents');
+            if (reasonData) reasons.push('insufficient_data');
+
+            const body = new URLSearchParams();
+            body.set('enrollment_id', String(enrollmentId));
+            body.set('status', 'rejected');
+            body.set('reasons', JSON.stringify(reasons));
+            body.set('missing_documents', JSON.stringify(missingDocs));
+            body.set('custom_message', customMessage);
+
+            fetch('php/update_enrollment_status.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString()
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message || 'Enrollment rejected successfully.');
+                        closeRejectEnrollmentModal();
+                        loadEnrollments();
+                    } else {
+                        alert('Error rejecting enrollment: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error rejecting enrollment:', error);
+                    alert('Error rejecting enrollment');
+                });
+        }
+
         function acceptEnrollment(enrollmentId) {
             if (!confirm('Accept this enrollment? A student account will be created and login details will be emailed.')) {
                 return;
@@ -2427,6 +2938,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         let msg = data.message || 'Enrollment accepted.';
                         if (data.mail_sent === false && data.mail_warning) {
                             msg += '\n\nEmail could not be sent: ' + data.mail_warning;
+                        }
+                        if (data.assessment_mail_sent === false && data.assessment_mail_warning) {
+                            msg += '\n\nAssessment email could not be sent: ' + data.assessment_mail_warning;
                         }
                         alert(msg);
                         if (typeof loadEnrollments === 'function') {
@@ -2571,6 +3085,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         function updateStatus(enrollmentId, status) {
+            if (status === 'rejected') {
+                const enrollee = allEnrollments.find(e => String(e.id) === String(enrollmentId));
+                if (!enrollee) {
+                    alert('Enrollment details not found. Please reload.');
+                    return;
+                }
+                openRejectEnrollmentModalById(enrollmentId);
+                return;
+            }
             const statusText = status === 'approved' ? 'accept' : status === 'rejected' ? 'reject' : 'request documents';
             if (confirm(`Are you sure you want to ${statusText} this enrollment?`)) {
                 fetch('php/update_enrollment_status.php', {
@@ -2827,10 +3350,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         activate('payablesManagementCard');
                     }
                     break;
+                case 'tuition-fees':
+                    if (userRole === 'admin') {
+                        activate('tuitionFeeManagerCard');
+                        if (typeof loadTuitionFeeManager === 'function') loadTuitionFeeManager();
+                    }
+                    break;
                 case 'payments':
                     if (['admin','cashier'].includes(userRole)) {
                         activate('paymentsCard');
-                        if (typeof loadPaymentStudents === 'function') loadPaymentStudents();
+                        if (typeof togglePaymentTarget === 'function') togglePaymentTarget();
                     }
                     break;
                 case 'grades':
@@ -3018,45 +3547,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             fetch('php/get_payables.php?_=' + timestamp)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success && data.payables && data.payables.length > 0) {
-                        let html = '';
-                        data.payables.forEach(payable => {
-                            const dueDate = new Date(payable.due_date);
-                            const today = new Date();
-                            
-                            if (payable.status === 'paid') {
-                                // handled
-                            } else if (payable.status === 'partially_paid') {
-                                html += `
-                                    <div class="payable-item bg-gray-50 p-6 hover:bg-gray-100 transition flex flex-col md:flex-row justify-between items-start md:items-center">
-                                        <div class="payable-details flex-1">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">Tuition Fee</h4>
-                                            <p class="text-gray-600 mb-2">Due: <span class="payable-date bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm">${dueDate.toLocaleDateString()}</span></p>
-                                            <p class="text-blue-600 text-sm">Partially Paid</p>
-                                        </div>
-                                        <div class="payable-amount text-left md:text-right min-w-[150px] mt-4 md:mt-0">
-                                            <div class="payable-total font-bold text-xl text-[#0a2d63]">₱${parseFloat(payable.amount).toLocaleString()}</div>
-                                            <div class="payable-status bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm inline-block">Partially Paid</div>
-                                        </div>
-                                    </div>
-                                `;
-                            } else {
-                                const isOverdue = dueDate < today;
-                                html += `
-                                    <div class="payable-item bg-gray-50 p-6 hover:bg-gray-100 transition flex flex-col md:flex-row justify-between items-start md:items-center">
-                                        <div class="payable-details flex-1">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">Tuition Fee</h4>
-                                            <p class="text-gray-600 mb-2">Due: <span class="payable-date bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm">${dueDate.toLocaleDateString()}</span></p>
-                                        </div>
-                                        <div class="payable-amount text-left md:text-right min-w-[150px] mt-4 md:mt-0">
-                                            <div class="payable-total font-bold text-xl text-[#0a2d63]">₱${parseFloat(payable.amount).toLocaleString()}</div>
-                                            <div class="payable-status px-3 py-1 rounded text-sm inline-block ${isOverdue ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${isOverdue ? 'Overdue' : 'Pending'}</div>
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                        });
-                        payableList.innerHTML = html;
+                    if (data.success && data.payables) {
+                        payableList.innerHTML = renderStudentPayablesTable(data.payables, data.totals || null);
                     } else {
                         payableList.innerHTML = '<div class="text-center text-gray-400 py-10">No payables found.</div>';
                     }
@@ -3099,10 +3591,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         function loadPaymentStudents() {
-            const studentSelect = document.getElementById('paymentStudentSelect');
-            if (!studentSelect) return;
-            
-            studentSelect.innerHTML = '<option value="">Loading students...</option>';
+            const datalist = document.getElementById('paymentStudentDatalist');
+            if (!datalist) return;
+            datalist.innerHTML = '';
             
             fetch('php/get_users.php', {
                 method: 'POST',
@@ -3112,21 +3603,192 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.users) {
-                        let options = '<option value="">Select Student</option>';
-                        data.users.forEach(user => {
-                            if (user.role === 'student') {
-                                options += `<option value="${user.id}">${user.full_name} (${user.grade_level || ''} - ${user.section || ''})</option>`;
-                            }
+                        window.paymentStudentsCache = data.users
+                            .filter(u => u.role === 'student')
+                            .map(u => ({
+                                id: String(u.id),
+                                name: String(u.full_name || '').trim(),
+                                label: `${String(u.full_name || '').trim()} (Grade ${u.grade_level || ''} - ${u.section || ''})`
+                            }))
+                            .filter(u => u.name !== '');
+
+                        let optionsHtml = '';
+                        window.paymentStudentsCache.forEach(s => {
+                            optionsHtml += `<option value="${s.name}"></option>`;
                         });
-                        studentSelect.innerHTML = options;
+                        datalist.innerHTML = optionsHtml;
                     } else {
-                        studentSelect.innerHTML = '<option value="">Error loading students</option>';
+                        window.paymentStudentsCache = [];
                     }
                 })
                 .catch(error => {
                     console.error('Error loading students:', error);
-                    studentSelect.innerHTML = '<option value="">Error loading students</option>';
+                    window.paymentStudentsCache = [];
                 });
+        }
+
+        function setPaymentStudentSelection(student) {
+            const searchInput = document.getElementById('paymentStudentSearch');
+            const idInput = document.getElementById('paymentStudentId');
+            if (searchInput) searchInput.value = student?.name || '';
+            if (idInput) idInput.value = student?.id || '';
+        }
+
+        function handlePaymentStudentTyping() {
+            const input = document.getElementById('paymentStudentSearch');
+            const idInput = document.getElementById('paymentStudentId');
+            if (!input || !idInput) return;
+            const typed = input.value.trim().toLowerCase();
+            if (!typed) {
+                idInput.value = '';
+                return;
+            }
+            const exact = (window.paymentStudentsCache || []).find(s => s.name.toLowerCase() === typed);
+            if (exact) {
+                idInput.value = exact.id;
+            } else {
+                idInput.value = '';
+            }
+        }
+
+        function autoCorrectPaymentStudent() {
+            const input = document.getElementById('paymentStudentSearch');
+            if (!input) return;
+            const typed = input.value.trim();
+            if (!typed) {
+                setPaymentStudentSelection(null);
+                return;
+            }
+            const needle = typed.toLowerCase();
+            const list = window.paymentStudentsCache || [];
+            const exact = list.find(s => s.name.toLowerCase() === needle);
+            if (exact) {
+                setPaymentStudentSelection(exact);
+                return;
+            }
+            const starts = list.find(s => s.name.toLowerCase().startsWith(needle));
+            if (starts) {
+                setPaymentStudentSelection(starts);
+                return;
+            }
+            const contains = list.find(s => s.name.toLowerCase().includes(needle));
+            if (contains) {
+                setPaymentStudentSelection(contains);
+                return;
+            }
+            // No match: clear id but keep text
+            const idInput = document.getElementById('paymentStudentId');
+            if (idInput) idInput.value = '';
+        }
+
+        function loadPaymentEnrollees() {
+            const input = document.getElementById('paymentEnrolleeSearch');
+            if (input) {
+                input.placeholder = 'Type enrollee name...';
+            }
+
+            fetch('php/get_pending_enrollees.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.enrollments) {
+                        window.paymentEnrolleesCache = data.enrollments.map(e => ({
+                            id: String(e.id),
+                            name: String(e.full_name || '').trim(),
+                            grade: String(e.grade_level || ''),
+                            downpayment_total: parseFloat(e.downpayment_total || 0)
+                        })).filter(e => e.name !== '');
+                    } else {
+                        window.paymentEnrolleesCache = [];
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading enrollees:', error);
+                    window.paymentEnrolleesCache = [];
+                });
+        }
+
+        function togglePaymentTarget() {
+            const target = document.getElementById('paymentTargetType')?.value || 'student';
+            const studentGroup = document.getElementById('paymentStudentGroup');
+            const enrolleeGroup = document.getElementById('paymentEnrollmentGroup');
+            const studentSearch = document.getElementById('paymentStudentSearch');
+            const studentId = document.getElementById('paymentStudentId');
+            const enrolleeSearch = document.getElementById('paymentEnrolleeSearch');
+            const enrolleeId = document.getElementById('paymentEnrollmentId');
+            const loadBtn = document.getElementById('loadPayablesBtn');
+
+            if (target === 'enrollee') {
+                if (studentGroup) studentGroup.style.display = 'none';
+                if (enrolleeGroup) enrolleeGroup.style.display = 'block';
+                if (studentSearch) studentSearch.required = false;
+                if (enrolleeSearch) enrolleeSearch.required = true;
+                if (loadBtn) loadBtn.style.display = 'none';
+                if (studentSearch) studentSearch.value = '';
+                if (studentId) studentId.value = '';
+                loadPaymentEnrollees();
+            } else {
+                if (studentGroup) studentGroup.style.display = 'block';
+                if (enrolleeGroup) enrolleeGroup.style.display = 'none';
+                if (studentSearch) studentSearch.required = true;
+                if (enrolleeSearch) enrolleeSearch.required = false;
+                if (loadBtn) loadBtn.style.display = 'inline-block';
+                if (enrolleeSearch) enrolleeSearch.value = '';
+                if (enrolleeId) enrolleeId.value = '';
+                loadPaymentStudents();
+            }
+        }
+
+        function setPaymentEnrolleeSelection(enrollee) {
+            const searchInput = document.getElementById('paymentEnrolleeSearch');
+            const idInput = document.getElementById('paymentEnrollmentId');
+            if (searchInput) searchInput.value = enrollee?.name || '';
+            if (idInput) idInput.value = enrollee?.id || '';
+        }
+
+        function handlePaymentEnrolleeTyping() {
+            const input = document.getElementById('paymentEnrolleeSearch');
+            const idInput = document.getElementById('paymentEnrollmentId');
+            if (!input || !idInput) return;
+            const typed = input.value.trim().toLowerCase();
+            if (!typed) {
+                idInput.value = '';
+                return;
+            }
+            const exact = (window.paymentEnrolleesCache || []).find(e => e.name.toLowerCase() === typed);
+            if (exact) {
+                idInput.value = exact.id;
+            } else {
+                idInput.value = '';
+            }
+        }
+
+        function autoCorrectPaymentEnrollee() {
+            const input = document.getElementById('paymentEnrolleeSearch');
+            if (!input) return;
+            const typed = input.value.trim();
+            if (!typed) {
+                setPaymentEnrolleeSelection(null);
+                return;
+            }
+            const needle = typed.toLowerCase();
+            const list = window.paymentEnrolleesCache || [];
+            const exact = list.find(e => e.name.toLowerCase() === needle);
+            if (exact) {
+                setPaymentEnrolleeSelection(exact);
+                return;
+            }
+            const starts = list.find(e => e.name.toLowerCase().startsWith(needle));
+            if (starts) {
+                setPaymentEnrolleeSelection(starts);
+                return;
+            }
+            const contains = list.find(e => e.name.toLowerCase().includes(needle));
+            if (contains) {
+                setPaymentEnrolleeSelection(contains);
+                return;
+            }
+            const idInput = document.getElementById('paymentEnrollmentId');
+            if (idInput) idInput.value = '';
         }
 
         // ---------- DOM Ready ----------
@@ -3143,7 +3805,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <?php endif; ?>
             
             <?php if ($userRole === 'cashier'): ?>
-            // Pre-load payment students when payments card becomes active
+            togglePaymentTarget();
+            <?php endif; ?>
+            <?php if ($userRole === 'admin'): ?>
+            togglePaymentTarget();
             <?php endif; ?>
             
             <?php if ($userRole == 'student'): ?>
@@ -3161,13 +3826,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 const documentModal = document.getElementById('documentModal');
                 const enrollmentSearchModal = document.getElementById('enrollmentSearchModal');
                 const studentSelectModal = document.getElementById('studentSelectModal');
+                const paymentEnrolleeSelectModal = document.getElementById('paymentEnrolleeSelectModal');
+                const paymentStudentSelectModal = document.getElementById('paymentStudentSelectModal');
                 const batchPromoteModal = document.getElementById('batchPromoteModal');
+                const rejectEnrollmentModal = document.getElementById('rejectEnrollmentModal');
                 if (event.target === addModal) closeAddUserModal();
                 if (event.target === deleteModal) closeDeleteUserModal();
                 if (event.target === documentModal) closeDocumentModal();
                 if (event.target === enrollmentSearchModal) closeEnrollmentSearchModal();
                 if (event.target === studentSelectModal) closeStudentSelectModal();
+                if (event.target === paymentEnrolleeSelectModal) closePaymentEnrolleeBrowseModal();
+                if (event.target === paymentStudentSelectModal) closePaymentStudentBrowseModal();
                 if (event.target === batchPromoteModal) closeBatchPromoteModal();
+                if (event.target === rejectEnrollmentModal) closeRejectEnrollmentModal();
             }
         });
 
@@ -3545,6 +4216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <li><a href="#" onclick="navigateTo('users'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-users">User Management</a></li>
                     <li><a href="#" onclick="navigateTo('payables'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-payables">Payables Management</a></li>
                     <li><a href="#" onclick="navigateTo('payments'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-payments">Payment Processing</a></li>
+                    <li><a href="#" onclick="navigateTo('tuition-fees'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-tuition-fees">Tuition Fee Manager</a></li>
                     <li><a href="#" onclick="navigateTo('profile'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-profile">Profile</a></li>
                 <?php elseif ($userRole === 'cashier'): ?>
                     <li><a href="#" onclick="navigateTo('payables'); return false;" class="block px-6 py-4 text-white text-opacity-90 hover:bg-white hover:bg-opacity-10 hover:text-white active:bg-white active:bg-opacity-20 active:border-l-4 active:border-green-500 font-medium transition" id="menu-payables">Payables Management</a></li>
@@ -3580,18 +4252,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </svg>
                         </button>
                     </div>
-                    <div class="header-center text-left md:text-center flex-1 min-w-[200px]">
+                    <div class="header-center text-center flex-1 min-w-[200px]">
                         <?php if (in_array($userRole, ['student', 'teacher'])): ?>
-                            <h2 class="text-xl md:text-2xl lg:text-3xl font-semibold mb-1 truncate">Welcome <?php echo ucfirst($userRole) . ' ' . htmlspecialchars($fullName); ?></h2>
+                            <h2 class="text-xl md:text-2xl lg:text-3xl font-semibold mb-1">Welcome <?php echo ucfirst($userRole) . ' ' . htmlspecialchars($fullName); ?></h2>
                         <?php else: ?>
-                            <h2 class="text-xl md:text-2xl lg:text-3xl font-semibold mb-1 truncate">Welcome to Your Dashboard</h2>
+                            <h2 class="text-xl md:text-2xl lg:text-3xl font-semibold mb-1">Welcome to Your Dashboard</h2>
                         <?php endif; ?>
-                        <p class="text-xs md:text-base opacity-90 hidden sm:block truncate">Stay updated with your academic progress and school activities</p>
+                        <p class="text-xs md:text-base opacity-90 hidden sm:block">Stay updated with your academic progress and school activities</p>
                     </div>
-                    <div class="header-right flex items-center justify-end gap-2 md:gap-4">
-                        <div class="user-info-container flex items-center gap-2 md:gap-4">
-                            <span class="user-name font-bold text-lg md:text-xl lg:text-2xl text-white truncate max-w-[100px] sm:max-w-xs"><?php echo htmlspecialchars($fullName); ?></span>
-                            <button class="logout-btn bg-white text-[#0a2d63] px-3 py-1.5 md:px-5 md:py-2 rounded-full font-semibold hover:bg-gray-100 hover:-translate-y-0.5 transition text-sm md:text-base whitespace-nowrap" onclick="window.location.href='php/logout.php'">Logout</button>
+                    <div class="header-right flex items-center justify-end w-full sm:w-auto">
+                        <div class="user-info-container flex flex-wrap sm:flex-nowrap items-end sm:items-center justify-end gap-2 md:gap-4 w-full sm:w-auto">
+                            <span class="user-name font-bold text-sm sm:text-lg md:text-xl lg:text-2xl text-white text-right break-words max-w-[160px] sm:max-w-xs"><?php echo htmlspecialchars($fullName); ?></span>
+                            <button class="logout-btn bg-white text-[#0a2d63] px-3 py-1.5 md:px-5 md:py-2 rounded-full font-semibold hover:bg-gray-100 hover:-translate-y-0.5 transition text-sm md:text-base whitespace-nowrap flex-shrink-0" onclick="window.location.href='php/logout.php'">Logout</button>
                         </div>
                     </div>
                 </div>
@@ -3698,13 +4370,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                     </div>
                                 </div>
                                 <div class="flex gap-4 justify-center flex-wrap">
-                                    <button onclick="openAddUserModal()" class="bg-green-600 text-white px-6 py-3 rounded font-medium hover:bg-green-700 transition flex items-center gap-2">
+                                    <button onclick="openAddUserModal()" class="bg-green-600 text-white px-6 py-3 rounded font-medium hover:bg-green-700 transition flex items-center justify-center gap-2 w-full sm:w-auto">
                                         Add User
                                     </button>
-                                    <button onclick="openEditUserModal()" class="bg-yellow-500 text-white px-6 py-3 rounded font-medium hover:bg-yellow-600 transition flex items-center gap-2">
+                                    <button onclick="openEditUserModal()" class="bg-yellow-500 text-white px-6 py-3 rounded font-medium hover:bg-yellow-600 transition flex items-center justify-center gap-2 w-full sm:w-auto">
                                         Edit User
                                     </button>
-                                    <button onclick="openDeleteUserModal()" class="bg-red-600 text-white px-6 py-3 rounded font-medium hover:bg-red-700 transition flex items-center gap-2">
+                                    <button onclick="openDeleteUserModal()" class="bg-red-600 text-white px-6 py-3 rounded font-medium hover:bg-red-700 transition flex items-center justify-center gap-2 w-full sm:w-auto">
                                         Delete User
                                     </button>
                                 </div>
@@ -3754,12 +4426,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                         <input type="text" id="dirSearchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onkeyup="applyUserDirectoryFilters()">
                                     </div>
                                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div class="flex flex-wrap gap-2 items-center">
-                                            <span class="text-sm font-semibold text-[#0a2d63]">Sort:</span>
-                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition active" onclick="setUserDirectorySort('name')" id="dir-sort-name">Name</span>
-                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setUserDirectorySort('role')" id="dir-sort-role">Role</span>
-                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setUserDirectorySort('grade')" id="dir-sort-grade">Grade</span>
-                                            <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition" onclick="setUserDirectorySort('date')" id="dir-sort-date">Date joined</span>
+                                        <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+                                            <span class="text-sm font-semibold text-[#0a2d63] mb-1 sm:mb-0">Sort:</span>
+                                            <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 items-center">
+                                                <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition active text-center flex items-center justify-center" onclick="setUserDirectorySort('name')" id="dir-sort-name">Name</span>
+                                                <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition text-center flex items-center justify-center" onclick="setUserDirectorySort('role')" id="dir-sort-role">Role</span>
+                                                <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition text-center flex items-center justify-center" onclick="setUserDirectorySort('grade')" id="dir-sort-grade">Grade</span>
+                                                <span class="dir-sort-option px-3 py-1 border border-gray-300 rounded-full cursor-pointer text-sm hover:bg-gray-200 transition text-center flex items-center justify-center" onclick="setUserDirectorySort('date')" id="dir-sort-date">Date joined</span>
+                                            </div>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2">
                                             <span class="text-sm font-semibold text-[#0a2d63]">Show:</span>
@@ -3848,11 +4522,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 <div class="p-6 bg-gray-50 rounded space-y-4">
                                     <h4 class="text-lg font-semibold text-[#0a2d63]">Process Payment</h4>
                                     <form id="paymentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div class="form-group">
-                                            <label for="paymentStudentSelect" class="block mb-2 font-medium text-gray-700">Select Student *</label>
-                                            <select id="paymentStudentSelect" class="w-full p-2 border border-gray-300 rounded" required>
-                                                <option value="">Select Student</option>
+                                        <div class="form-group md:col-span-2">
+                                            <label for="paymentTargetType" class="block mb-2 font-medium text-gray-700">Payment For *</label>
+                                            <select id="paymentTargetType" class="w-full p-2 border border-gray-300 rounded" onchange="togglePaymentTarget()">
+                                                <option value="student">Student</option>
+                                                <option value="enrollee">Pending Enrollee Downpayment</option>
                                             </select>
+                                        </div>
+                                        <div class="form-group" id="paymentStudentGroup">
+                                            <label for="paymentStudentSearch" class="block mb-2 font-medium text-gray-700">Select Student *</label>
+                                            <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                                                <input type="text" id="paymentStudentSearch" list="paymentStudentDatalist" placeholder="Type student name..." class="w-full p-2 border border-gray-300 rounded" autocomplete="off" oninput="handlePaymentStudentTyping()" onblur="autoCorrectPaymentStudent()">
+                                                <button type="button" onclick="openPaymentStudentBrowseModal()" class="bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition">
+                                                    Browse
+                                                </button>
+                                            </div>
+                                            <datalist id="paymentStudentDatalist"></datalist>
+                                            <input type="hidden" id="paymentStudentId" value="">
+                                        </div>
+                                        <div class="form-group" id="paymentEnrollmentGroup" style="display:none;">
+                                            <label for="paymentEnrolleeSearch" class="block mb-2 font-medium text-gray-700">Select Enrollee *</label>
+                                            <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                                                <input type="text" id="paymentEnrolleeSearch" placeholder="Type enrollee name..." class="w-full p-2 border border-gray-300 rounded" autocomplete="off" oninput="handlePaymentEnrolleeTyping()" onblur="autoCorrectPaymentEnrollee()">
+                                                <button type="button" onclick="openPaymentEnrolleeBrowseModal()" class="bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition">
+                                                    Browse
+                                                </button>
+                                            </div>
+                                            <input type="hidden" id="paymentEnrollmentId" value="">
                                         </div>
                                         <div class="form-group">
                                             <label for="paymentAmount" class="block mb-2 font-medium text-gray-700">Payment Amount *</label>
@@ -3863,7 +4559,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                             <input type="date" id="paymentDate" value="<?php echo date('Y-m-d'); ?>" class="w-full p-2 border border-gray-300 rounded">
                                         </div>
                                         <div class="form-actions md:col-span-2 text-center flex flex-col sm:flex-row gap-4 justify-center">
-                                            <button type="button" onclick="loadStudentPayables()" class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition w-full sm:w-auto">
+                                            <button type="button" id="loadPayablesBtn" onclick="loadStudentPayables()" class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition w-full sm:w-auto">
                                                 Load Student Payables
                                             </button>
                                             <button type="button" onclick="processPayment()" class="bg-green-600 text-white px-5 py-2 rounded font-medium hover:bg-green-700 transition w-full sm:w-auto">
@@ -3875,10 +4571,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                                 <div id="studentPayables" class="hidden p-6 bg-gray-50 border border-gray-200 rounded space-y-4">
                                     <h4 class="text-lg font-semibold text-[#0a2d63]">Student Payables</h4>
+                                    <div id="payablesTotals"></div>
                                     <div id="payablesList" class="loading overflow-x-auto">Loading payables...</div>
                                 </div>
 
                                 <div id="paymentResult" class="hidden p-6 bg-green-100 border border-green-300 rounded text-green-700"></div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card bg-white shadow-lg border border-gray-200 hidden" id="tuitionFeeManagerCard">
+                            <div class="card-content p-8 space-y-6 w-full">
+                                <div>
+                                    <h3 class="text-2xl font-semibold text-[#0a2d63] mb-2">Tuition Fee Manager</h3>
+                                    <p class="text-gray-600">Edit tuition fee components for Grades 7–12. Changes update unpaid payables for existing students in that grade.</p>
+                                </div>
+
+                                <div class="p-5 bg-gray-50 border border-gray-200 rounded space-y-4">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div class="text-sm text-gray-600">Click a grade row to edit and save.</div>
+                                        <button type="button" onclick="loadTuitionFeeManager()" class="bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition w-full sm:w-auto">Reload</button>
+                                    </div>
+                                    <div id="tuitionFeeManagerStatus" class="text-sm"></div>
+                                    <div id="tuitionFeeManagerTable" class="overflow-x-auto"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -3972,11 +4687,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 <div class="p-6 bg-gray-50 rounded space-y-4">
                                     <h4 class="text-lg font-semibold text-[#0a2d63]">Process Payment</h4>
                                     <form id="paymentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div class="form-group">
-                                            <label for="paymentStudentSelect" class="block mb-2 font-medium text-gray-700">Select Student *</label>
-                                            <select id="paymentStudentSelect" class="w-full p-2 border border-gray-300 rounded" required>
-                                                <option value="">Select Student</option>
+                                        <div class="form-group md:col-span-2">
+                                            <label for="paymentTargetType" class="block mb-2 font-medium text-gray-700">Payment For *</label>
+                                            <select id="paymentTargetType" class="w-full p-2 border border-gray-300 rounded" onchange="togglePaymentTarget()">
+                                                <option value="student">Student</option>
+                                                <option value="enrollee">Pending Enrollee Downpayment</option>
                                             </select>
+                                        </div>
+                                        <div class="form-group" id="paymentStudentGroup">
+                                            <label for="paymentStudentSearch" class="block mb-2 font-medium text-gray-700">Select Student *</label>
+                                            <input type="text" id="paymentStudentSearch" list="paymentStudentDatalist" placeholder="Type student name..." class="w-full p-2 border border-gray-300 rounded" autocomplete="off" oninput="handlePaymentStudentTyping()" onblur="autoCorrectPaymentStudent()">
+                                            <datalist id="paymentStudentDatalist"></datalist>
+                                            <input type="hidden" id="paymentStudentId" value="">
+                                        </div>
+                                        <div class="form-group" id="paymentEnrollmentGroup" style="display:none;">
+                                            <label for="paymentEnrolleeSearch" class="block mb-2 font-medium text-gray-700">Select Enrollee *</label>
+                                            <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                                                <input type="text" id="paymentEnrolleeSearch" placeholder="Type enrollee name..." class="w-full p-2 border border-gray-300 rounded" autocomplete="off" oninput="handlePaymentEnrolleeTyping()" onblur="autoCorrectPaymentEnrollee()">
+                                                <button type="button" onclick="openPaymentEnrolleeBrowseModal()" class="bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition">
+                                                    Browse
+                                                </button>
+                                            </div>
+                                            <input type="hidden" id="paymentEnrollmentId" value="">
                                         </div>
                                         <div class="form-group">
                                             <label for="paymentAmount" class="block mb-2 font-medium text-gray-700">Payment Amount *</label>
@@ -3987,7 +4719,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                             <input type="date" id="paymentDate" value="<?php echo date('Y-m-d'); ?>" class="w-full p-2 border border-gray-300 rounded">
                                         </div>
                                         <div class="form-actions md:col-span-2 text-center flex flex-col sm:flex-row gap-4 justify-center">
-                                            <button type="button" onclick="loadStudentPayables()" class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition w-full sm:w-auto">
+                                            <button type="button" id="loadPayablesBtn" onclick="loadStudentPayables()" class="bg-[#0a2d63] text-white px-5 py-2 rounded font-medium hover:bg-[#08306b] transition w-full sm:w-auto">
                                                 Load Student Payables
                                             </button>
                                             <button type="button" onclick="processPayment()" class="bg-green-600 text-white px-5 py-2 rounded font-medium hover:bg-green-700 transition w-full sm:w-auto">
@@ -3998,6 +4730,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 </div>
                                 <div id="studentPayables" class="hidden p-6 bg-gray-50 border border-gray-200 rounded space-y-4">
                                     <h4 class="text-lg font-semibold text-[#0a2d63]">Student Payables</h4>
+                                    <div id="payablesTotals"></div>
                                     <div id="payablesList" class="loading overflow-x-auto">Loading payables...</div>
                                 </div>
                                 <div id="paymentResult" class="hidden p-6 bg-green-100 border border-green-300 rounded text-green-700"></div>
@@ -4750,7 +5483,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                             <div class="form-group sm:col-span-2">
                                 <label class="block mb-2 font-medium text-gray-700">LRN</label>
-                                <input type="text" name="lrn" id="modalLrnField" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none">
+                                <input type="text" name="lrn" id="modalLrnField" inputmode="numeric" maxlength="12" pattern="[0-9]{12}" placeholder="12-digit LRN" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none">
+                                <small class="text-gray-500 block mt-1">Must be exactly 12 digits</small>
                             </div>
                             <div id="modalStrandContainer" class="form-group sm:col-span-2 hidden">
                                 <label class="block mb-2 font-medium text-gray-700">Strand *</label>
@@ -4825,6 +5559,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <h4 class="text-base md:text-lg font-semibold text-[#0a2d63] mb-3">Subject Assignments</h4>
                         <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                             <p class="text-sm text-yellow-800 mb-4">Select a grade level and check/uncheck subjects to assign or unassign them to this teacher:</p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                
+                            </div>
                             
                             <div id="selectedSubjectsSummary" class="mb-4 p-3 bg-white rounded border border-yellow-300 hidden">
                                 <p class="font-medium text-sm text-gray-700 mb-2">Selected Subjects:</p>
@@ -4834,15 +5571,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             
                             <div class="mb-4">
                                 <label class="block mb-2 font-medium text-gray-700">Filter by Grade Level</label>
-                                <select id="subjectGradeFilter" onchange="filterSubjectsByGrade()" class="w-full sm:w-1/2 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
-                                    <option value="">All Grades</option>
-                                    <option value="Grade 7">Grade 7</option>
-                                    <option value="Grade 8">Grade 8</option>
-                                    <option value="Grade 9">Grade 9</option>
-                                    <option value="Grade 10">Grade 10</option>
-                                    <option value="Grade 11">Grade 11</option>
-                                    <option value="Grade 12">Grade 12</option>
-                                </select>
+                                <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <select id="subjectGradeFilter" onchange="updateSubjectSectionFilter(); filterSubjectsByGrade()" class="w-full sm:flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
+                                        <option value="">All Grades</option>
+                                        <option value="Grade 7">Grade 7</option>
+                                        <option value="Grade 8">Grade 8</option>
+                                        <option value="Grade 9">Grade 9</option>
+                                        <option value="Grade 10">Grade 10</option>
+                                        <option value="Grade 11">Grade 11</option>
+                                        <option value="Grade 12">Grade 12</option>
+                                    </select>
+                                    <select id="subjectSectionFilter" onchange="filterSubjectsByGrade()" class="w-full sm:flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
+                                        <option value="">All Sections</option>
+                                    </select>
+                                    <button type="button" id="subjectSelectAllBtn" onclick="toggleSelectAllSubjects()" class="w-full sm:w-auto px-4 py-2 rounded border border-yellow-300 bg-white text-yellow-800 font-medium hover:bg-yellow-50 transition">
+                                        Select All
+                                    </button>
+                                </div>
                             </div>
                             
                             <div id="subjectCheckboxes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-2 bg-white rounded border border-yellow-100">
@@ -4942,6 +5687,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         </div>
     </div>
 
+    <div id="rejectEnrollmentModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-[1000] p-4" style="display: none;">
+        <div class="modal-container bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl flex flex-col">
+            <div class="modal-header p-4 md:p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center sticky top-0 z-10">
+                <h3 class="text-lg md:text-xl font-semibold text-[#0a2d63]">Reject Enrollment</h3>
+                <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closeRejectEnrollmentModal()">×</button>
+            </div>
+            <div class="modal-body p-4 md:p-6 flex-1 overflow-y-auto space-y-4">
+                <input type="hidden" id="rejectEnrollmentId">
+                <div class="bg-gray-50 border border-gray-200 rounded p-4 text-sm">
+                    <p><span class="font-semibold">Enrollee:</span> <span id="rejectEnrollmentName">-</span></p>
+                    <p><span class="font-semibold">Grade:</span> <span id="rejectEnrollmentGrade">-</span></p>
+                </div>
+
+                <div>
+                    <p class="font-semibold text-[#0a2d63] mb-2">Reason(s) *</p>
+                    <label class="flex items-center gap-2 mb-2">
+                        <input type="checkbox" id="rejectReasonDocs" onchange="toggleMissingDocsBox()">
+                        <span>Lack of documents</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="rejectReasonData">
+                        <span>Insufficient data</span>
+                    </label>
+                    <p id="rejectReasonError" class="text-red-600 text-sm mt-2" style="display:none;">Select at least one reason.</p>
+                </div>
+
+                <div id="rejectMissingDocsContainer" class="bg-gray-50 border border-gray-200 rounded p-4" style="display:none;">
+                    <p class="font-semibold text-[#0a2d63] mb-2">Missing documents *</p>
+                    <div id="rejectMissingDocsList" class="space-y-2"></div>
+                    <p id="rejectDocsError" class="text-red-600 text-sm mt-2" style="display:none;">Select at least one missing document.</p>
+                </div>
+
+                <div>
+                    <label for="rejectCustomMessage" class="block mb-2 font-semibold text-[#0a2d63]">Custom message (optional)</label>
+                    <textarea id="rejectCustomMessage" rows="4" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" placeholder="Add additional details for the enrollee email."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer p-4 md:p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg flex flex-col-reverse sm:flex-row justify-end gap-2 sticky bottom-0 z-10">
+                <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition w-full sm:w-auto" onclick="closeRejectEnrollmentModal()">Cancel</button>
+                <button class="bg-red-600 text-white px-5 py-2 rounded font-medium hover:bg-red-700 transition w-full sm:w-auto" onclick="submitRejectEnrollment()">Confirm Reject</button>
+            </div>
+        </div>
+    </div>
+
     <div id="deleteUserModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-[1000] p-4" style="display: none;">
         <div class="modal-container bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl flex flex-col">
             <div class="modal-header p-4 md:p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center sticky top-0 z-10">
@@ -5024,6 +5813,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             </div>
             <div class="modal-footer p-4 md:p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right sticky bottom-0 z-10">
                 <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition w-full sm:w-auto" onclick="closeStudentSelectModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="paymentEnrolleeSelectModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-[1000] p-4" style="display: none;">
+        <div class="modal-container bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl flex flex-col">
+            <div class="modal-header p-4 md:p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center sticky top-0 z-10">
+                <h3 class="text-lg md:text-xl font-semibold text-[#0a2d63]">Select Enrollee</h3>
+                <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closePaymentEnrolleeBrowseModal()">×</button>
+            </div>
+            <div class="modal-body p-4 md:p-6 flex-1 overflow-y-auto">
+                <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 class="text-base md:text-lg font-semibold text-[#0a2d63] mb-3">Search Enrollee</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        <div class="form-group mb-0">
+                            <label class="block mb-1 font-medium text-gray-700 text-sm">Search by Name</label>
+                            <input type="text" id="paymentEnrolleeSearchInput" placeholder="Type name..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onkeyup="filterPaymentEnrolleesInModal()">
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="block mb-1 font-medium text-gray-700 text-sm">Filter by Grade Level</label>
+                            <select id="paymentEnrolleeFilterGrade" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onchange="filterPaymentEnrolleesInModal()">
+                                <option value="">All Grades</option>
+                                <option value="Grade 7">Grade 7</option>
+                                <option value="Grade 8">Grade 8</option>
+                                <option value="Grade 9">Grade 9</option>
+                                <option value="Grade 10">Grade 10</option>
+                                <option value="Grade 11">Grade 11</option>
+                                <option value="Grade 12">Grade 12</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" onclick="filterPaymentEnrolleesInModal()" class="bg-[#0a2d63] text-white px-4 py-2 rounded font-medium hover:bg-[#08306b] transition w-full">Search</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="paymentEnrolleeSelectResults" class="search-results min-h-[200px] border border-gray-200 rounded">
+                    <div class="text-center p-10 text-gray-500">Loading enrollees...</div>
+                </div>
+            </div>
+            <div class="modal-footer p-4 md:p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right sticky bottom-0 z-10">
+                <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition w-full sm:w-auto" onclick="closePaymentEnrolleeBrowseModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="paymentStudentSelectModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-[1000] p-4" style="display: none;">
+        <div class="modal-container bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl flex flex-col">
+            <div class="modal-header p-4 md:p-5 border-b border-gray-200 bg-gray-50 rounded-t-lg flex justify-between items-center sticky top-0 z-10">
+                <h3 class="text-lg md:text-xl font-semibold text-[#0a2d63]">Select Student</h3>
+                <button class="modal-close text-2xl text-gray-600 hover:text-gray-800 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition" onclick="closePaymentStudentBrowseModal()">×</button>
+            </div>
+            <div class="modal-body p-4 md:p-6 flex-1 overflow-y-auto">
+                <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 class="text-base md:text-lg font-semibold text-[#0a2d63] mb-3">Search Student</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="form-group mb-0">
+                            <label class="block mb-1 font-medium text-gray-700 text-sm">Search by Name / Email</label>
+                            <input type="text" id="paymentStudentSearchInput" placeholder="Type to search..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onkeyup="filterPaymentStudentsInModal()">
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="block mb-1 font-medium text-gray-700 text-sm">Filter by Grade Level</label>
+                            <select id="paymentStudentFilterGrade" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onchange="updatePaymentStudentSections(); filterPaymentStudentsInModal()">
+                                <option value="">All Grades</option>
+                                <option value="Grade 7">Grade 7</option>
+                                <option value="Grade 8">Grade 8</option>
+                                <option value="Grade 9">Grade 9</option>
+                                <option value="Grade 10">Grade 10</option>
+                                <option value="Grade 11">Grade 11</option>
+                                <option value="Grade 12">Grade 12</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="block mb-1 font-medium text-gray-700 text-sm">Filter by Section</label>
+                            <select id="paymentStudentFilterSection" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#0a2d63] outline-none" onchange="filterPaymentStudentsInModal()">
+                                <option value="">All Sections</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div id="paymentStudentSelectResults" class="search-results min-h-[200px] border border-gray-200 rounded">
+                    <div class="text-center p-10 text-gray-500">Loading students...</div>
+                </div>
+            </div>
+            <div class="modal-footer p-4 md:p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right sticky bottom-0 z-10">
+                <button class="bg-gray-600 text-white px-5 py-2 rounded font-medium hover:bg-gray-700 transition w-full sm:w-auto" onclick="closePaymentStudentBrowseModal()">Cancel</button>
             </div>
         </div>
     </div>
@@ -5270,7 +6144,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         const search = document.getElementById('studentSearchInput').value;
         const grade = document.getElementById('studentFilterGrade').value;
         const section = document.getElementById('studentFilterSection').value;
-        const perPage = document.getElementById('studentResultsPerPage').value;
+        const perPageSelection = document.getElementById('studentResultsPerPage').value;
+        const customPerPage = parseInt(document.getElementById('studentCustomPerPage')?.value || '', 10);
+        let perPage = parseInt(perPageSelection, 10);
+        if (perPageSelection === 'custom') {
+            perPage = Number.isFinite(customPerPage) && customPerPage > 0 ? customPerPage : 10;
+        }
+        perPage = Math.min(100, Math.max(1, perPage || 10));
         
         const resultsDiv = document.getElementById('studentSelectResults');
         resultsDiv.innerHTML = '<div class="text-center p-10 text-gray-500">Loading students...</div>';
@@ -5280,7 +6160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         formData.append('search', search);
         formData.append('grade_filter', grade);
         formData.append('section_filter', section);
-        formData.append('per_page', perPage);
+        formData.append('per_page', String(perPage));
         formData.append('page', '1');
         
         fetch(window.location.href, { method: 'POST', body: formData })
@@ -5324,6 +6204,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         document.getElementById('studentSelect').value = id;
         document.getElementById('selectedStudentName').value = name;
         closeStudentSelectModal();
+
+        // Auto-fill fee totals in Payables Calculator (if present)
+        const tuitionFeeInput = document.getElementById('tuitionFee');
+        const downPaymentInput = document.getElementById('downPayment');
+        if (tuitionFeeInput || downPaymentInput) {
+            fetch('php/get_student_payables.php?student_id=' + id)
+                .then(parseJsonResponse)
+                .then(data => {
+                    const t = data?.totals || null;
+                    if (!t) return;
+                    if (tuitionFeeInput) {
+                        tuitionFeeInput.value = (parseFloat(t.fee_total || 0) || 0).toFixed(2);
+                    }
+                    if (downPaymentInput) {
+                        downPaymentInput.value = (parseFloat(t.downpayment_total || 0) || 0).toFixed(2);
+                    }
+                })
+                .catch(err => console.error('Auto-fill fee totals failed:', err));
+        }
     }
 
     function updateStudentFilterSections() {
@@ -5372,6 +6271,263 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             filterStudentsForSelect();
         }
     }
+
+    // ==================== PAYMENT ENROLLEE BROWSE MODAL ====================
+    function openPaymentEnrolleeBrowseModal() {
+        const modal = document.getElementById('paymentEnrolleeSelectModal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        const input = document.getElementById('paymentEnrolleeSearchInput');
+        if (input) input.value = '';
+        const results = document.getElementById('paymentEnrolleeSelectResults');
+        if (results) results.innerHTML = '<div class="text-center p-10 text-gray-500">Loading enrollees...</div>';
+
+        fetch('php/get_pending_enrollees.php')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.enrollments)) {
+                    window.paymentEnrolleesCache = data.enrollments.map(e => ({
+                        id: String(e.id),
+                        name: String(e.full_name || '').trim(),
+                        grade: String(e.grade_level || ''),
+                        downpayment_total: parseFloat(e.downpayment_total || 0)
+                    })).filter(e => e.name !== '');
+                    filterPaymentEnrolleesInModal();
+                } else {
+                    window.paymentEnrolleesCache = [];
+                    if (results) results.innerHTML = '<div class="text-center p-10 text-gray-500">No enrollees found.</div>';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                window.paymentEnrolleesCache = [];
+                if (results) results.innerHTML = '<div class="text-center p-10 text-red-500">Error loading enrollees</div>';
+            });
+    }
+
+    function closePaymentEnrolleeBrowseModal() {
+        const modal = document.getElementById('paymentEnrolleeSelectModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function filterPaymentEnrolleesInModal() {
+        const query = (document.getElementById('paymentEnrolleeSearchInput')?.value || '').trim().toLowerCase();
+        const grade = document.getElementById('paymentEnrolleeFilterGrade')?.value || '';
+        const results = document.getElementById('paymentEnrolleeSelectResults');
+        if (!results) return;
+        
+        let filtered = window.paymentEnrolleesCache || [];
+        if (query) {
+            filtered = filtered.filter(e => e.name.toLowerCase().includes(query) || e.email.toLowerCase().includes(query));
+        }
+        if (grade) {
+            filtered = filtered.filter(e => e.grade === grade);
+        }
+
+        if (filtered.length === 0) {
+            results.innerHTML = '<div class="text-center p-10 text-gray-500">No enrollees found.</div>';
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(e => {
+            const dp = e.downpayment_total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            html += `
+                <div class="student-item p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer flex flex-col sm:flex-row sm:justify-between sm:items-center" onclick="selectPaymentEnrollee('${e.id}', '${e.name.replace(/'/g, "\\'")}')">
+                    <div>
+                        <div class="font-semibold text-[#0a2d63]">${e.name}</div>
+                        <div class="text-sm text-gray-600">Grade: ${e.grade || '-'}</div>
+                    </div>
+                    <div class="text-sm text-gray-500 mt-1 sm:mt-0 font-medium">Downpayment: ₱${dp}</div>
+                </div>
+            `;
+        });
+        results.innerHTML = html;
+    }
+
+    function selectPaymentEnrollee(id, name) {
+        setPaymentEnrolleeSelection({ id, name });
+        closePaymentEnrolleeBrowseModal();
+    }
+
+    // ==================== PAYMENT STUDENT BROWSE MODAL ====================
+    function openPaymentStudentBrowseModal() {
+        const modal = document.getElementById('paymentStudentSelectModal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        const input = document.getElementById('paymentStudentSearchInput');
+        if (input) input.value = '';
+        const results = document.getElementById('paymentStudentSelectResults');
+        if (results) results.innerHTML = '<div class="text-center p-10 text-gray-500">Loading students...</div>';
+
+        fetch('php/get_users.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.users)) {
+                    window.paymentStudentsCache = data.users
+                        .filter(u => u.role === 'student')
+                        .map(u => ({
+                            id: String(u.id),
+                            name: String(u.full_name || '').trim(),
+                            email: String(u.email || ''),
+                            grade_level: String(u.grade_level || ''),
+                            section: String(u.section || ''),
+                        }))
+                        .filter(s => s.name !== '');
+                    filterPaymentStudentsInModal();
+                } else {
+                    window.paymentStudentsCache = [];
+                    if (results) results.innerHTML = '<div class="text-center p-10 text-gray-500">No students found.</div>';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                window.paymentStudentsCache = [];
+                if (results) results.innerHTML = '<div class="text-center p-10 text-red-500">Error loading students</div>';
+            });
+    }
+
+    function closePaymentStudentBrowseModal() {
+        const modal = document.getElementById('paymentStudentSelectModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function updatePaymentStudentSections() {
+        const grade = document.getElementById('paymentStudentFilterGrade')?.value;
+        const sectionSelect = document.getElementById('paymentStudentFilterSection');
+        if (!sectionSelect) return;
+        
+        if (!grade) {
+            sectionSelect.innerHTML = '<option value="">All Sections</option>';
+            return;
+        }
+        
+        const gradeSections = {
+            'Grade 7': ['Love', 'Joy'],
+            'Grade 8': ['Patience', 'Peace'],
+            'Grade 9': ['Goodness', 'Kindness'],
+            'Grade 10': ['Gentleness', 'Faithfulness'],
+            'Grade 11': ['Self-Control', 'Honesty'],
+            'Grade 12': ['Humility', 'Meekness']
+        };
+        const sections = gradeSections[grade] || [];
+        let html = '<option value="">All Sections</option>';
+        sections.forEach(section => {
+            html += `<option value="${section}">${section}</option>`;
+        });
+        sectionSelect.innerHTML = html;
+    }
+
+    function filterPaymentStudentsInModal() {
+        const query = (document.getElementById('paymentStudentSearchInput')?.value || '').trim().toLowerCase();
+        const grade = document.getElementById('paymentStudentFilterGrade')?.value || '';
+        const section = document.getElementById('paymentStudentFilterSection')?.value || '';
+        const results = document.getElementById('paymentStudentSelectResults');
+        if (!results) return;
+        
+        let filtered = window.paymentStudentsCache || [];
+        if (query) {
+            filtered = filtered.filter(s => s.name.toLowerCase().includes(query) || s.email.toLowerCase().includes(query));
+        }
+        if (grade) {
+            filtered = filtered.filter(s => s.grade_level === grade);
+        }
+        if (section) {
+            filtered = filtered.filter(s => s.section === section);
+        }
+
+        if (filtered.length === 0) {
+            results.innerHTML = '<div class="text-center p-10 text-gray-500">No students found.</div>';
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(s => {
+            html += `
+                <div class="student-item p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer flex flex-col sm:flex-row sm:justify-between sm:items-center" onclick="selectPaymentStudent('${s.id}', '${s.name.replace(/'/g, "\\'")}')">
+                    <div>
+                        <div class="font-semibold text-[#0a2d63]">${s.name}</div>
+                        <div class="text-sm text-gray-600 break-all">${s.email}</div>
+                    </div>
+                    <div class="text-sm text-gray-500 mt-1 sm:mt-0 font-medium">Grade ${s.grade_level} - ${s.section}</div>
+                </div>
+            `;
+        });
+        results.innerHTML = html;
+    }
+
+    function selectPaymentStudent(id, name) {
+        setPaymentStudentSelection({ id, name });
+        closePaymentStudentBrowseModal();
+    }
 </script>
-</body\>
-</html\>
+<?php if (isset($_SESSION['require_password_change']) && $_SESSION['require_password_change'] === true): ?>
+    <div class="fixed inset-0 bg-black bg-opacity-70 z-[9999] flex items-center justify-center pointer-events-auto backdrop-blur-sm" id="forcePasswordModal">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl relative">
+            <h2 class="text-2xl justify-center flex font-bold text-[#0a2d63] mb-2">Welcome!</h2>
+            <p class="text-gray-600 mb-4 text-sm text-center">For your security, please change your default password to continue.</p>
+            
+            <form id="forcePasswordForm" onsubmit="event.preventDefault(); submitForcePassword();">
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-2 text-sm">New Password</label>
+                    <input type="password" id="forceNewPassword" required class="w-full border border-gray-300 rounded p-2 focus:ring-[#0a2d63] focus:border-[#0a2d63] outline-none transition" />
+                    <ul class="text-xs text-gray-500 mt-2 list-disc pl-5">
+                        <li id="reqUpper" class="text-red-500 transition-colors">At least 1 uppercase letter</li>
+                        <li id="reqSpecial" class="text-red-500 transition-colors">At least 1 special character</li>
+                        <li id="reqLength" class="text-red-500 transition-colors">At least 6 characters long</li>
+                    </ul>
+                </div>
+                <div class="mt-6 flex flex-col gap-2">
+                    <button type="submit" id="forceSubmitBtn" class="bg-[#0a2d63] text-white px-4 py-2 rounded font-semibold disabled:opacity-50 transition w-full" disabled>Change Password</button>
+                    <div id="forcePasswordError" class="text-red-500 text-sm text-center font-medium empty:hidden"></div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        const passInput = document.getElementById('forceNewPassword');
+        const submitBtn = document.getElementById('forceSubmitBtn');
+        const reqUpper = document.getElementById('reqUpper');
+        const reqSpecial = document.getElementById('reqSpecial');
+        const reqLength = document.getElementById('reqLength');
+
+        passInput.addEventListener('input', function() {
+            const val = this.value;
+            let okUpper = /[A-Z]/.test(val);
+            let okSpec = /[^a-zA-Z0-9]/.test(val);
+            let okLen = val.length >= 6;
+
+            reqUpper.className = 'transition-colors ' + (okUpper ? 'text-green-600' : 'text-red-500');
+            reqSpecial.className = 'transition-colors ' + (okSpec ? 'text-green-600' : 'text-red-500');
+            reqLength.className = 'transition-colors ' + (okLen ? 'text-green-600' : 'text-red-500');
+
+            submitBtn.disabled = !(okUpper && okSpec && okLen);
+        });
+
+        function submitForcePassword() {
+            const newPassword = passInput.value;
+            const formData = new FormData();
+            formData.append('new_password', newPassword);
+
+            fetch('php/change_first_login_password.php', {
+                method: 'POST',
+                body: formData
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    document.getElementById('forcePasswordModal').style.display = 'none';
+                    alert('Password successfully updated!');
+                } else {
+                    document.getElementById('forcePasswordError').innerText = data.message || 'Error updating password';
+                }
+            }).catch(err => {
+                document.getElementById('forcePasswordError').innerText = 'Network error. Try again.';
+            });
+        }
+    </script>
+<?php endif; ?>
+</body>
+</html>

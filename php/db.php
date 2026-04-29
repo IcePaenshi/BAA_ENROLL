@@ -1,8 +1,8 @@
 <?php
 $host = 'localhost';
-$dbname = 'baa_portal';
-$username = 'root';
-$password = '';
+$dbname = 'u411086182_db_J8b94vuN';
+$username = 'u411086182_usr_J8b94vuN';
+$password = '2R>xj^Vn';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);

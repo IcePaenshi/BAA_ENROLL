@@ -98,4 +98,32 @@ function baa_user_schema_ensure(PDO $pdo): void
             error_log('baa_user_schema_ensure strand: ' . $e->getMessage());
         }
     }
+
+    try {
+        $after = $hasColumn('strand') ? 'strand' : 'lrn';
+        $pdo->exec("ALTER TABLE users MODIFY teacher_grade_level VARCHAR(20) NULL AFTER `$after`");
+    } catch (PDOException $e) {
+    }
+    if (!$hasColumn('teacher_grade_level')) {
+        $after = $hasColumn('strand') ? 'strand' : 'lrn';
+        try {
+            $pdo->exec("ALTER TABLE users ADD COLUMN teacher_grade_level VARCHAR(20) NULL AFTER `$after`");
+        } catch (PDOException $e) {
+            error_log('baa_user_schema_ensure teacher_grade_level: ' . $e->getMessage());
+        }
+    }
+
+    try {
+        $after = $hasColumn('teacher_grade_level') ? 'teacher_grade_level' : ($hasColumn('strand') ? 'strand' : 'lrn');
+        $pdo->exec("ALTER TABLE users MODIFY teacher_section VARCHAR(50) NULL AFTER `$after`");
+    } catch (PDOException $e) {
+    }
+    if (!$hasColumn('teacher_section')) {
+        $after = $hasColumn('teacher_grade_level') ? 'teacher_grade_level' : ($hasColumn('strand') ? 'strand' : 'lrn');
+        try {
+            $pdo->exec("ALTER TABLE users ADD COLUMN teacher_section VARCHAR(50) NULL AFTER `$after`");
+        } catch (PDOException $e) {
+            error_log('baa_user_schema_ensure teacher_section: ' . $e->getMessage());
+        }
+    }
 }
