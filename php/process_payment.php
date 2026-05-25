@@ -16,14 +16,58 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
+$paymentTarget = $_POST['payment_target'] ?? 'student';
 $studentId = $_POST['student_id'] ?? '';
+$enrollmentId = $_POST['enrollment_id'] ?? '';
 $amount = $_POST['amount'] ?? '';
-$paymentDate = $_POST['payment_date'] ?? date('Y-m-d');
-
-if (!$studentId || !is_numeric($studentId)) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Invalid student ID']);
+$paymentType = strtolower(trim((string) ($_POST['payment_type'] ?? '')));
+$paymentMode = strtolower(trim((string) ($_POST['payment_mode'] ?? '')));
+$paymentDate = trim((string) ($_POST['payment_date'] ?? ''));
+if ($paymentDate === '') {
+    $paymentDate = date('Y-m-d');
+}
+$paymentDateObj = DateTime::createFromFormat('Y-m-d', $paymentDate);
+if (!$paymentDateObj || $paymentDateObj->format('Y-m-d') !== $paymentDate) {
+    echo json_encode(['success' => false, 'message' => 'Invalid payment date']);
     exit();
+}
+
+if (!in_array($paymentTarget, ['student', 'enrollee'], true)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid payment target']);
+    exit();
+}
+
+// Enforce minimum 2000 for first payment on student
+if ($paymentTarget === 'student' && $studentId) {
+    $pdo->exec("\n        CREATE TABLE IF NOT EXISTS student_downpayments (\n            id INT AUTO_INCREMENT PRIMARY KEY,\n            student_id INT NOT NULL,\n            amount DECIMAL(10,2) NOT NULL,\n            payment_date DATE NOT NULL,\n            processed_by INT NOT NULL,\n            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n            INDEX idx_student_id (student_id)\n        )\n    ");
+
+    $checkPayments = $pdo->prepare("SELECT COUNT(*) FROM payments WHERE student_id = ?");
+    $checkPayments->execute([$studentId]);
+    $hasPayments = $checkPayments->fetchColumn() > 0;
+
+    $checkDownpayments = $pdo->prepare("SELECT COUNT(*) FROM student_downpayments WHERE student_id = ?");
+    $checkDownpayments->execute([$studentId]);
+    $hasDownpayments = $checkDownpayments->fetchColumn() > 0;
+
+    if (!$hasPayments && !$hasDownpayments && (float)$amount < 2000) {
+        echo json_encode(['success' => false, 'message' => 'First payment must be at least ₱2,000.00']);
+        exit();
+    }
+}
+
+// Normalize payment type:
+// - enrollee payments are always downpayments
+// - student payments can be downpayment or payment
+if ($paymentTarget === 'enrollee') {
+    $paymentType = 'downpayment';
+} else {
+    if ($paymentType === '') {
+        $paymentType = 'payment';
+    }
+    if (!in_array($paymentType, ['downpayment', 'payment'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid payment type']);
+        exit();
+    }
 }
 
 if (!is_numeric($amount) || $amount <= 0) {
@@ -33,6 +77,69 @@ if (!is_numeric($amount) || $amount <= 0) {
 }
 
 try {
+    if ($paymentTarget === 'enrollee') {
+        if (!$enrollmentId || !is_numeric($enrollmentId)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid enrollment ID']);
+            exit();
+        }
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS enrollment_downpayments (\n                id INT AUTO_INCREMENT PRIMARY KEY,\n                enrollment_id INT NOT NULL,\n                amount DECIMAL(10,2) NOT NULL,\n                payment_date DATE NOT NULL,\n                processed_by INT NOT NULL,\n                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n                INDEX idx_enrollment_id (enrollment_id)\n            )");
+
+        try {
+            $pdo->exec("ALTER TABLE enrollment_downpayments ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(32) DEFAULT NULL");
+        } catch (PDOException $e) {
+            // ignore if ALTER not supported
+        }
+
+        $check = $pdo->prepare("SELECT id, status FROM enrollments WHERE id = ? LIMIT 1");
+        $check->execute([(int) $enrollmentId]);
+        $enrollment = $check->fetch(PDO::FETCH_ASSOC);
+        if (!$enrollment) {
+            echo json_encode(['success' => false, 'message' => 'Enrollment not found']);
+            exit();
+        }
+        if (($enrollment['status'] ?? '') === 'approved') {
+            echo json_encode(['success' => false, 'message' => 'Enrollment is already approved']);
+            exit();
+        }
+
+        $insert = $pdo->prepare("
+            INSERT INTO enrollment_downpayments (enrollment_id, amount, payment_date, processed_by, payment_mode)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $insert->execute([(int) $enrollmentId, (float) $amount, $paymentDate, (int) $_SESSION['user_id'], $paymentMode]);
+
+        $sumStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM enrollment_downpayments WHERE enrollment_id = ?");
+        $sumStmt->execute([(int) $enrollmentId]);
+        $total = (float) ($sumStmt->fetchColumn() ?: 0);
+
+        echo json_encode([
+            'success' => true,
+            'message' => '<div style="color: #155724; background: #d4edda; padding: 15px; border-radius: 4px;"><h4 style="margin: 0 0 8px 0;">✓ Downpayment Recorded</h4><p style="margin:0;">Total enrollee downpayment: ₱' . number_format($total, 2) . '</p></div>'
+        ]);
+        exit();
+    }
+
+    if (!$studentId || !is_numeric($studentId)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid student ID']);
+        exit();
+    }
+
+    // Create student downpayments table if needed
+    if ($paymentType === 'downpayment') {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS student_downpayments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                student_id INT NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                payment_date DATE NOT NULL,
+                processed_by INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_student_id (student_id)
+            )
+        ");
+    }
+
     // Start transaction
     $pdo->beginTransaction();
     
@@ -44,97 +151,56 @@ try {
     $stmt->execute([$studentId]);
     $payables = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    error_log("Found " . count($payables) . " payables for student $studentId");
+    error_log("Found " . count($payables) . " manual payables for student $studentId");
     
-    if (empty($payables)) {
-        $pdo->rollBack();
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'message' => 'No payables found for this student']);
-        exit();
+    // Process new fields: Monthly Plans and Discounts
+    $monthlyPlans = isset($_POST['monthly_plans']) ? (int)$_POST['monthly_plans'] : 0;
+    if ($monthlyPlans > 0 && $monthlyPlans <= 8) {
+        $pdo->prepare("UPDATE users SET payment_plan_months = ? WHERE id = ?")->execute([$monthlyPlans, $studentId]);
     }
     
-    $remainingAmount = floatval($amount);
-    $paidPayables = [];
-    $totalApplied = 0;
-    $updatedPayableIds = [];
-    
-    // Apply payment to payables (oldest first)
-    foreach ($payables as $payable) {
-        if ($remainingAmount <= 0) break;
-        
-        $payableId = $payable['id'];
-        $payableAmount = floatval($payable['amount']);
-        $payableName = $payable['item_name'] ?: 'Tuition Fee';
-        $currentStatus = $payable['status'];
-        
-        // Skip if already paid
-        if ($currentStatus === 'paid') {
-            continue;
-        }
-        
-        error_log("Processing payable $payableId: Amount $payableAmount, Status: $currentStatus");
-        
-        if ($remainingAmount >= $payableAmount) {
-            // FULL PAYMENT: Mark as paid
-            $updateStmt = $pdo->prepare("UPDATE payables SET status = 'paid' WHERE id = ?");
-            $updateResult = $updateStmt->execute([$payableId]);
-            
-            error_log("Marked payable $payableId as paid. Rows affected: " . $updateStmt->rowCount());
-            
-            $paidPayables[] = $payableName . ' (₱' . number_format($payableAmount, 2) . ')';
-            $remainingAmount -= $payableAmount;
-            $totalApplied += $payableAmount;
-            $updatedPayableIds[] = $payableId;
-            
-        } else {
-            // PARTIAL PAYMENT: Update amount and keep as pending
-            $newAmount = $payableAmount - $remainingAmount;
-            $updateStmt = $pdo->prepare("UPDATE payables SET amount = ?, status = 'pending' WHERE id = ?");
-            $updateResult = $updateStmt->execute([$newAmount, $payableId]);
-            
-            error_log("Updated payable $payableId to amount $newAmount. Rows affected: " . $updateStmt->rowCount());
-            
-            $paidPayables[] = $payableName . ' (₱' . number_format($remainingAmount, 2) . ' partial of ₱' . number_format($payableAmount, 2) . ')';
-            $totalApplied += $remainingAmount;
-            $remainingAmount = 0;
-            $updatedPayableIds[] = $payableId;
+    $discountId = isset($_POST['discounts']) ? (int)$_POST['discounts'] : 0;
+    if ($discountId > 0) {
+        // Get discount amount
+        $discStmt = $pdo->prepare("SELECT amount FROM discounts WHERE id = ?");
+        $discStmt->execute([$discountId]);
+        $discAmount = $discStmt->fetchColumn();
+        if ($discAmount) {
+            // Check if already assigned
+            $checkDisc = $pdo->prepare("SELECT id FROM student_discounts WHERE student_id = ? AND discount_id = ?");
+            $checkDisc->execute([$studentId, $discountId]);
+            if (!$checkDisc->fetchColumn()) {
+                $pdo->prepare("INSERT INTO student_discounts (student_id, discount_id, amount, applied_date) VALUES (?, ?, ?, ?)")
+                    ->execute([$studentId, $discountId, $discAmount, date('Y-m-d')]);
+            }
         }
     }
     
-    // Record the payment transaction
-    $stmt = $pdo->prepare("INSERT INTO payments (student_id, amount, payment_date, processed_by) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$studentId, $totalApplied, $paymentDate, $_SESSION['user_id']]);
-    $paymentId = $pdo->lastInsertId();
-    
-    error_log("Created payment record $paymentId for amount $totalApplied");
+    $paymentId = null;
+    $totalApplied = floatval($amount);
+
+    if ($paymentType === 'downpayment') {
+        $stmt = $pdo->prepare("INSERT INTO student_downpayments (student_id, amount, payment_date, processed_by, payment_mode) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$studentId, $totalApplied, $paymentDate, $_SESSION['user_id'], $paymentMode]);
+        $paymentId = $pdo->lastInsertId();
+        error_log("Created student_downpayment record $paymentId for amount $totalApplied");
+    } else {
+        $stmt = $pdo->prepare("INSERT INTO payments (student_id, amount, payment_type, payment_date, set_by_user_id, payment_mode) VALUES (?, ?, 'payment', ?, ?, ?)");
+        $stmt->execute([$studentId, $totalApplied, $paymentDate, $_SESSION['user_id'], $paymentMode]);
+        $paymentId = $pdo->lastInsertId();
+        error_log("Created payment record $paymentId for amount $totalApplied");
+    }
     
     // Commit transaction
     $pdo->commit();
     
-    // Verify updates
-    error_log("Updated payable IDs: " . implode(', ', $updatedPayableIds));
-    
     // Prepare success message
     $message = '<div style="color: #155724; background: #d4edda; padding: 15px; border-radius: 4px; margin-bottom: 15px;">';
     $message .= '<h4 style="margin: 0 0 10px 0; color: #155724;">✓ Payment Processed Successfully</h4>';
-    $message .= '<p style="margin: 5px 0;"><strong>Payment ID:</strong> #' . $paymentId . '</p>';
+    $message .= '<p style="margin: 5px 0;"><strong>' . ($paymentType === 'downpayment' ? 'Downpayment ID' : 'Payment ID') . ':</strong> #' . $paymentId . '</p>';
     $message .= '<p style="margin: 5px 0;"><strong>Total Applied:</strong> ₱' . number_format($totalApplied, 2) . '</p>';
     $message .= '<p style="margin: 5px 0;"><strong>Date:</strong> ' . date('F j, Y', strtotime($paymentDate)) . '</p>';
     $message .= '</div>';
-    
-    if (!empty($paidPayables)) {
-        $message .= '<div style="margin-top: 15px;"><strong>Payment Applied To:</strong><ul style="margin: 10px 0 0 20px; padding: 0;">';
-        foreach ($paidPayables as $item) {
-            $message .= '<li style="margin: 5px 0;">' . $item . '</li>';
-        }
-        $message .= '</ul></div>';
-    }
-    
-    if ($remainingAmount > 0) {
-        $message .= '<div style="margin-top: 15px; color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px;">';
-        $message .= '<strong>Note:</strong> ₱' . number_format($remainingAmount, 2) . ' was refunded/excess.';
-        $message .= '</div>';
-    }
     
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => $message]);

@@ -23,6 +23,9 @@ if ($enrollmentId < 1) {
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mail_util.php';
+require_once __DIR__ . '/../fpdf/fpdf.php';
+require_once __DIR__ . '/get_fee_breakdown.php';
+require_once __DIR__ . '/pdf_assessment_template.php';
 
 $gradeSections = [
     'Grade 7'  => ['Love', 'Joy'],
@@ -88,6 +91,86 @@ function baa_unique_username(PDO $pdo, string $base): string
     }
 }
 
+function baa_generate_basic_assessment_pdf(array $student, float $downpayment, array $feeBreakdown = []): string
+{
+    // Keep function name for compatibility with existing call sites, but generate the shared "good-looking" PDF.
+    global $pdo;
+    $studentUserId = (int) ($student['user_id'] ?? 0);
+    if ($studentUserId < 1) {
+        throw new RuntimeException('Student user id is required for assessment PDF generation');
+    }
+
+    $tuition = (float) ($feeBreakdown['tuition'] ?? 0);
+    $misc = (float) ($feeBreakdown['misc'] ?? 0);
+    $aircon = (float) ($feeBreakdown['aircon'] ?? 0);
+    $hsa = (float) ($feeBreakdown['hsa'] ?? 0);
+    $books = (float) ($feeBreakdown['books'] ?? 0);
+
+    $pdf = baa_build_assessment_pdf($pdo, $studentUserId, [
+        'tuition' => $tuition,
+        'misc' => $misc,
+        'aircon' => $aircon,
+        'hsa' => $hsa,
+        'books' => $books,
+        'discounts' => 0,
+        'downPayment' => $downpayment,
+        'monthlyPayments' => 4,
+        'monthlyPaymentAmount' => 0,
+    ]);
+
+    $tmpPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'assessment_enr_' . ($student['student_id'] ?? uniqid()) . '_' . time() . '.pdf';
+    $pdf->Output('F', $tmpPath);
+    return $tmpPath;
+}
+
+function baa_apply_amount_to_payables(PDO $pdo, int $studentUserId, float $amount): void
+{
+    if ($amount <= 0) return;
+    // Apply to pending payables in a fixed priority order
+    $priority = ['Tuition', 'Misc', 'Aircon', 'HSA', 'Books'];
+    $in = implode(',', array_fill(0, count($priority), '?'));
+    $stmt = $pdo->prepare("
+        SELECT id, item_name, amount, status
+        FROM payables
+        WHERE student_id = ?
+          AND (status = 'pending' OR status IS NULL OR status = '')
+          AND item_name IN ($in)
+        ORDER BY FIELD(item_name, " . implode(',', array_fill(0, count($priority), '?')) . "), id ASC
+    ");
+    $params = array_merge([$studentUserId], $priority, $priority);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $remaining = $amount;
+    foreach ($rows as $r) {
+        if ($remaining <= 0) break;
+        $pid = (int) $r['id'];
+        $amt = (float) $r['amount'];
+        if ($amt <= 0) {
+            continue;
+        }
+        if ($remaining >= $amt) {
+            $pdo->prepare("UPDATE payables SET amount = 0, status = 'paid' WHERE id = ?")->execute([$pid]);
+            $remaining -= $amt;
+        } else {
+            $newAmt = round($amt - $remaining, 2);
+            $pdo->prepare("UPDATE payables SET amount = ?, status = 'pending' WHERE id = ?")->execute([$newAmt, $pid]);
+            $remaining = 0;
+        }
+    }
+}
+
+function baa_safe_rollback(PDO $pdo): void
+{
+    try {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    } catch (Throwable $rollbackEx) {
+        error_log('accept_enrollment_student rollback failed: ' . $rollbackEx->getMessage());
+    }
+}
+
 /** Student created from this enrollment: student_id ENR-{id} or same email + role student */
 function baa_find_linked_student(PDO $pdo, int $enrollmentId, string $email): ?array
 {
@@ -111,6 +194,18 @@ function baa_find_linked_student(PDO $pdo, int $enrollmentId, string $email): ?a
 }
 
 try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS enrollment_downpayments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            enrollment_id INT NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            payment_date DATE NOT NULL,
+            processed_by INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_enrollment_id (enrollment_id)
+        )
+    ");
+
     $stmt = $pdo->prepare('SELECT * FROM enrollments WHERE id = ?');
     $stmt->execute([$enrollmentId]);
     $e = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -121,6 +216,9 @@ try {
 
     $status = strtolower(trim((string) ($e['status'] ?? '')));
     $email = trim($e['email'] ?? '');
+    $downStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM enrollment_downpayments WHERE enrollment_id = ?");
+    $downStmt->execute([$enrollmentId]);
+    $downpaymentTotal = (float) ($downStmt->fetchColumn() ?: 0);
 
     // Already approved (e.g. first run created the account but email failed) — resend credentials
     if ($status === 'approved') {
@@ -142,7 +240,9 @@ try {
             exit();
         }
 
-        $plainPassword = 'baa123';
+        $bd = $e['birthdate'] ?? '';
+        $ln = trim($e['last_name'] ?? '');
+        $plainPassword = baa_slug_last_name($ln) . date('mdy', strtotime($bd));
         $hashedPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
         $updPw = $pdo->prepare('UPDATE users SET password = ? WHERE id = ?');
         $updPw->execute([$hashedPassword, $u['id']]);
@@ -165,7 +265,10 @@ try {
             $toEmail,
             $displayName,
             $u['username'],
-            $plainPassword
+            $plainPassword,
+            null,
+            'ENR-' . $enrollmentId,
+            baa_normalize_grade_level($e['grade_level'] ?? null) ?? ''
         );
 
         $out = [
@@ -193,6 +296,14 @@ try {
         exit();
     }
 
+    if ($downpaymentTotal < 2000) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Enrollment cannot be approved until the enrollee has paid at least PHP 2,000.00 in downpayment.',
+        ]);
+        exit();
+    }
+
     // Rejected after a prior accept: student row may still exist — re-approve enrollment and resend mail
     if ($status === 'rejected') {
         $u = baa_find_linked_student($pdo, $enrollmentId, $email);
@@ -201,7 +312,9 @@ try {
                 echo json_encode(['success' => false, 'message' => 'Linked account is not a student.']);
                 exit();
             }
-            $plainPassword = 'baa123';
+            $bd = $e['birthdate'] ?? '';
+            $ln = trim($e['last_name'] ?? '');
+            $plainPassword = baa_slug_last_name($ln) . date('mdy', strtotime($bd));
             $hashedPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
             $pdo->beginTransaction();
             try {
@@ -209,9 +322,7 @@ try {
                 $pdo->prepare('UPDATE users SET password = ? WHERE id = ?')->execute([$hashedPassword, $u['id']]);
                 $pdo->commit();
             } catch (Throwable $tx) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
-                }
+                baa_safe_rollback($pdo);
                 throw $tx;
             }
 
@@ -229,12 +340,30 @@ try {
                 exit();
             }
 
+            $feeBreakdown = baa_get_fee_breakdown($pdo, baa_normalize_grade_level($e['grade_level'] ?? null) ?? '') ?? [];
+            $assessmentPath = baa_generate_basic_assessment_pdf([
+                'user_id' => (int) ($u['id'] ?? 0),
+                'student_id' => 'ENR-' . $enrollmentId,
+                'full_name' => $displayName,
+                'grade_level' => baa_normalize_grade_level($e['grade_level'] ?? null) ?? '',
+                'section' => $e['section'] ?? ''
+            ], $downpaymentTotal, $feeBreakdown);
+
             [$mailOk, $mailErr] = baa_send_student_credentials_mail(
                 $toEmail,
                 $displayName,
                 $u['username'],
-                $plainPassword
+                $plainPassword,
+                $assessmentPath,
+                'ENR-' . $enrollmentId,
+                baa_normalize_grade_level($e['grade_level'] ?? null) ?? ''
             );
+
+            // keep separate assessment mail for compatibility
+            [$assessmentMailOk, $assessmentMailErr] = baa_send_assessment_form_mail($toEmail, $displayName, $assessmentPath);
+            if (is_readable($assessmentPath)) {
+                @unlink($assessmentPath);
+            }
 
             $out = [
                 'success'   => true,
@@ -242,10 +371,14 @@ try {
                 'user_id'   => (int) $u['id'],
                 'username'  => $u['username'],
                 'mail_sent' => $mailOk,
+                'assessment_mail_sent' => $assessmentMailOk,
                 'reopened'  => true,
             ];
             if (!$mailOk) {
                 $out['mail_warning'] = $mailErr;
+            }
+            if (!$assessmentMailOk) {
+                $out['assessment_mail_warning'] = $assessmentMailErr;
             }
             echo json_encode($out);
             exit();
@@ -259,10 +392,10 @@ try {
         exit();
     }
 
-    $firstName = trim($e['first_name'] ?? '');
-    $middleName = trim($e['middle_name'] ?? '');
-    $lastName = trim($e['last_name'] ?? '');
-    $suffix = trim($e['suffix'] ?? '');
+    $firstName = baa_normalize_name_part($e['first_name'] ?? '');
+    $middleName = baa_normalize_name_part($e['middle_name'] ?? '');
+    $lastName = baa_normalize_name_part($e['last_name'] ?? '');
+    $suffix = baa_normalize_name_part($e['suffix'] ?? '');
 
     if ($firstName === '' || $lastName === '') {
         echo json_encode(['success' => false, 'message' => 'Enrollment is missing first or last name']);
@@ -324,10 +457,29 @@ try {
 
     // users.lrn may be NOT NULL — store '' when no LRN
     $lrn = isset($e['lrn']) ? trim((string) $e['lrn']) : '';
+    $lrn = preg_replace('/\D/', '', $lrn);
+    if ($lrn !== '' && !preg_match('/^\d{12}$/', $lrn)) {
+        echo json_encode(['success' => false, 'message' => 'Enrollment LRN must be exactly 12 digits before acceptance']);
+        exit();
+    }
 
-    $slug = baa_slug_last_name($lastName);
-    $username = baa_unique_username($pdo, $slug);
-    $plainPassword = 'baa123';
+    $firstInit = !empty($firstName) ? strtolower($firstName[0]) : '';
+    $cleanLastName = baa_slug_last_name($lastName);
+    $username = $firstInit . '.' . $cleanLastName . '.' . $enrollmentId;
+
+    // Ensure uniqueness just in case
+    $check = $pdo->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+    $n = 2;
+    $baseUsername = $username;
+    while (true) {
+        $check->execute([$username]);
+        if (!$check->fetch()) {
+            break;
+        }
+        $username = $baseUsername . $n;
+        $n++;
+    }
+    $plainPassword = strtolower($lastName) . date('mdy', strtotime($birthdate));
     $hashedPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
     $studentIdValue = 'ENR-' . $enrollmentId;
 
@@ -337,8 +489,8 @@ try {
 
     $ins = $pdo->prepare('
         INSERT INTO users
-        (username, email, password, first_name, middle_name, last_name, suffix, role, grade_level, section, lrn, student_id, age, gender, birthdate, phone, strand)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (username, email, password, first_name, middle_name, last_name, suffix, role, grade_level, section, lrn, student_id, age, gender, birthdate, phone, strand, force_password_change)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     ');
     $ins->execute([
         $username,
@@ -361,17 +513,42 @@ try {
     ]);
     $userId = (int) $pdo->lastInsertId();
 
+    // Dynamic payables calculate total fee on the fly. 
+    // We just set the payment_start_date from the first downpayment.
+    $minDateStmt = $pdo->prepare("SELECT MIN(payment_date) FROM enrollment_downpayments WHERE enrollment_id = ?");
+    $minDateStmt->execute([$enrollmentId]);
+    $startDate = $minDateStmt->fetchColumn() ?: date('Y-m-d');
+    
+    $pdo->prepare("UPDATE users SET payment_start_date = ? WHERE id = ?")->execute([$startDate, $userId]);
+    
+    $breakdown = baa_get_fee_breakdown($pdo, $gradeLevel);
+    if (!$breakdown) {
+        throw new RuntimeException('No fee breakdown configured for ' . $gradeLevel);
+    }
+
     $upd = $pdo->prepare("UPDATE enrollments SET status = 'approved' WHERE id = ?");
     $upd->execute([$enrollmentId]);
 
     $pdo->commit();
 
-    $displayName = trim($firstName . ' ' . ($middleName !== '' ? $middleName . ' ' : '') . $lastName);
+    $displayName = baa_build_full_name([$firstName, $middleName, $lastName]);
     if ($suffix !== '') {
         $displayName .= ', ' . $suffix;
     }
 
-    [$mailOk, $mailErr] = baa_send_student_credentials_mail($email, $displayName, $username, $plainPassword);
+    $assessmentPath = baa_generate_basic_assessment_pdf([
+        'user_id' => (int) $userId,
+        'student_id' => $studentIdValue,
+        'full_name' => $displayName,
+        'grade_level' => $gradeLevel,
+        'section' => $section
+    ], $downpaymentTotal, $breakdown);
+
+    [$mailOk, $mailErr] = baa_send_student_credentials_mail($email, $displayName, $username, $plainPassword, $assessmentPath, 'ENR-' . $enrollmentId, $gradeLevel);
+    [$assessmentMailOk, $assessmentMailErr] = baa_send_assessment_form_mail($email, $displayName, $assessmentPath);
+    if (is_readable($assessmentPath)) {
+        @unlink($assessmentPath);
+    }
 
     $out = [
         'success'       => true,
@@ -379,15 +556,17 @@ try {
         'user_id'       => $userId,
         'username'      => $username,
         'mail_sent'     => $mailOk,
+        'assessment_mail_sent' => $assessmentMailOk,
     ];
     if (!$mailOk) {
         $out['mail_warning'] = $mailErr;
     }
+    if (!$assessmentMailOk) {
+        $out['assessment_mail_warning'] = $assessmentMailErr;
+    }
     echo json_encode($out);
 } catch (Throwable $ex) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
+    baa_safe_rollback($pdo);
     error_log('accept_enrollment_student: ' . $ex->getMessage());
     echo json_encode(['success' => false, 'message' => 'Server error: ' . $ex->getMessage()]);
 }

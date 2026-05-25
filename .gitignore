@@ -1,1 +1,4 @@
 php/mail_config.local.php
+php/handle_enrollment.php
+php/db.php
+php/config.local.php

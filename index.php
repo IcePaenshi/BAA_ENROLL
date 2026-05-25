@@ -5,6 +5,13 @@ if (isset($_SESSION['user_id'])) {
     header('Location: dashboard.php');
     exit();
 }
+// Load local configuration values for reCAPTCHA if available.
+$appConfig = [];
+$appConfigPath = __DIR__ . '/php/config.local.php';
+if (file_exists($appConfigPath)) {
+    $appConfig = require $appConfigPath;
+}
+$recaptchaSiteKey = $appConfig['recaptcha_site_key'] ?? getenv('RECAPTCHA_SITEKEY') ?: '';
 ?>
 <html lang="en">
 <head>
@@ -74,6 +81,35 @@ if (isset($_SESSION['user_id'])) {
             position: relative;
         }
 
+        /* Enrollment processing overlay */
+        #enrollmentLoadingOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.65);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(2px);
+        }
+
+        #enrollmentLoadingOverlay.show {
+            display: flex;
+        }
+
+        .enrollment-spinner {
+            width: 54px;
+            height: 54px;
+            border-radius: 999px;
+            border: 6px solid rgba(34, 197, 94, 0.25);
+            border-top-color: #22c55e;
+            animation: enrollmentSpin 0.85s linear infinite;
+        }
+
+        @keyframes enrollmentSpin {
+            to { transform: rotate(360deg); }
+        }
+
         .enrollment-form-container h2 {
             color: #0a2d63;
             font-size: 28px;
@@ -127,7 +163,7 @@ if (isset($_SESSION['user_id'])) {
             transition: left 0.3s ease-out;
             top: 5px;
             bottom: 5px;
-            width: calc(33.33% - 3.33px);
+            width: calc(50% - 5px);
             left: 5px;
             z-index: 0;
         }
@@ -555,8 +591,37 @@ if (isset($_SESSION['user_id'])) {
         }
 
         @media (max-width: 768px) {
+            .enrollment-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+            }
+
+            .enrollment-right {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                width: 0 !important;
+                height: 0 !important;
+                overflow: hidden !important;
+            }
+            
+            .rotating-login-images {
+                display: none !important;
+                visibility: hidden !important;
+            }
+            
+            .login-image {
+                display: none !important;
+            }
+            
+            .login-image img {
+                display: none !important;
+            }
+
             .enrollment-left {
                 padding: 30px 20px;
+                max-height: 100vh;
+                border-bottom: none;
             }
 
             .enrollment-logo img {
@@ -645,30 +710,15 @@ if (isset($_SESSION['user_id'])) {
                 <div class="login-form-container">
                     <h2>Welcome Back</h2>
 
-                    <?php
-                $error = isset($_GET['error']) ? $_GET['error'] : '';
-                $errorMsg = '';
-                if ($error == '1') {
-                    $errorMsg = 'Invalid username or password';
-                } elseif ($error == '2') {
-                    $errorMsg = 'Database error. Please try again later.';
-                } elseif ($error == 'inactive') {
-                    $errorMsg = 'Your account is inactive. Please contact the administrator.';
-                }
-                ?>
-                <?php if ($errorMsg): ?>
-                    <div class="error-message" id="errorMessage">
-                        <?php echo htmlspecialchars($errorMsg); ?>
-                    </div>
-                <?php endif; ?>
+                    <div class="error-message" id="loginErrorMessage" style="display: none;"></div>
 
-                    <form method="POST" action="php/login.php">
+                    <form id="loginForm">
                         <div class="input-group">
-                            <label for="username">Username</label>
+                            <label for="email">Username or Email</label>
                             <div class="input-with-icon">
                                 <div class="custom-icon username-icon"></div>
-                                <input type="text" id="username" name="username" required 
-                                       placeholder="Enter your username">
+                                <input type="text" id="email" name="email" required 
+                                       placeholder="Enter your username or email">
                             </div>
                         </div>
 
@@ -805,8 +855,8 @@ if (isset($_SESSION['user_id'])) {
                         </div>
                         
                         <!-- Back to Home Button at the bottom of requirements tab -->
-                        <div class="back-to-landing" style="margin-top: 15px;">
-                            <a href="#" onclick="backFromEnrollment(); return false;">← Back to Home</a>
+                        <div class="button-group" style="margin-top: 15px;">
+                            <button type="button" class="back-btn" onclick="backFromEnrollment()" style="width: auto; min-width: 250px;">Back to Home</button>
                         </div>
                     </div>
 
@@ -814,13 +864,11 @@ if (isset($_SESSION['user_id'])) {
                     <form id="enrollmentForm" style="display: none;">
                         <h2>Student Enrollment Form</h2>
 
-                        <!-- 3-Way Toggle Switch for Student Type -->
+                        <!-- 2-Way Toggle Switch for Student Type -->
                         <div class="student-type-toggle-container">
                             <div class="student-type-toggle">
                                 <input type="radio" name="studentType" id="newStudent" value="New Student" checked>
                                 <label for="newStudent">New Student</label>
-                                <input type="radio" name="studentType" id="oldStudent" value="Old Student">
-                                <label for="oldStudent">Old Student</label>
                                 <input type="radio" name="studentType" id="transferee" value="Transferee">
                                 <label for="transferee">Transferee</label>
                                 <div class="toggle-highlight"></div>
@@ -889,17 +937,15 @@ if (isset($_SESSION['user_id'])) {
                                     <option value="11">November</option>
                                     <option value="12">December</option>
                                 </select>
-                                <select id="birthDay" name="birthDay" required style="flex: 1;">
-                                    <option value="">Day</option>
-                                </select>
-                                <input type="number" id="birthYear" name="birthYear" placeholder="Year" required style="flex: 1;" min="1900" max="2100">
+                                <input type="number" id="birthDay" name="birthDay" placeholder="Day" required style="flex: 1;" min="1" max="31" inputmode="numeric" oninput="if(this.value.length>2) this.value=this.value.slice(0,2); if(this.value>31) this.value=31; if(this.value<1) this.value=1;">
+                                <input type="number" id="birthYear" name="birthYear" placeholder="Year" required style="flex: 1;" min="1900" max="2100" maxlength="4" inputmode="numeric" oninput="if(this.value.length>4) this.value=this.value.slice(0,4);">
                             </div>
                         </div>
 
                         <!-- Age (now readonly, calculated from birthdate) -->
                         <div class="enroll-input-group">
                             <label for="age">Age *</label>
-                            <input type="number" id="age" name="age" min="1" max="120" required placeholder="Calculated from birthdate" readonly style="background: #f8f9fa;">
+                            <input type="number" id="age" name="age" min="8" max="50" required placeholder="Calculated from birthdate" readonly style="background: #f8f9fa;">
                         </div>
 
                         <!-- Grade Level -->
@@ -927,10 +973,16 @@ if (isset($_SESSION['user_id'])) {
                             </select>
                         </div>
 
+                        <!-- LRN -->
+                        <div class="enroll-input-group">
+                            <label for="lrn">LRN *</label>
+                            <input type="text" id="lrn" name="lrn" maxlength="12" pattern="[0-9]{12}" required placeholder="Enter your 12-digit LRN" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,12)">
+                        </div>
+
                         <!-- Email -->
                         <div class="enroll-input-group">
                             <label for="enrollEmail">Email Address *</label>
-                            <input type="email" id="enrollEmail" name="email" required placeholder="Enter your email">
+                            <input type="email" id="enrollEmail" name="email" required placeholder="Enter your email" autocomplete="email">
                         </div>
 
                         <!-- Phone Number -->
@@ -954,7 +1006,11 @@ if (isset($_SESSION['user_id'])) {
                         </div>
 
                         <div class="enrollment-recaptcha-wrap">
-                            <div class="g-recaptcha" data-sitekey="6LfPGrAsAAAAAFfJ2uvzo9hCORgMlxH8Ju8zsO41"></div>
+                            <?php if (!empty($recaptchaSiteKey)): ?>
+                                <div class="g-recaptcha" data-sitekey="<?php echo htmlspecialchars($recaptchaSiteKey, ENT_QUOTES); ?>"></div>
+                            <?php else: ?>
+                                <div class="recaptcha-error">reCAPTCHA is not configured. Please contact the site administrator.</div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="button-group">
@@ -967,6 +1023,10 @@ if (isset($_SESSION['user_id'])) {
                         <a href="#" onclick="backFromEnrollment(); return false;">← Back to Home</a>
                     </div>
                 </div>
+            </div>
+
+            <div id="enrollmentLoadingOverlay" aria-hidden="true">
+                <div class="enrollment-spinner" role="status" aria-label="Processing enrollment"></div>
             </div>
 
             <!-- Right Side: Blue Animated Background with Rotating Images -->
@@ -1000,14 +1060,30 @@ if (isset($_SESSION['user_id'])) {
     <script src="js/script.js"></script>
     <script>
         // ========== NAME CAPITALIZATION FEATURE ==========
-        function capitalizeFirstLetter(str) {
-            if (!str) return str;
-            return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+        function capitalizeName(str) {
+            if (!str) return '';
+            const cleaned = String(str).trim().replace(/\s+/g, ' ');
+            if (!cleaned) return '';
+            // Capitalize each word, preserving hyphens/apostrophes (e.g., "anna-marie o'neil")
+            return cleaned
+                .split(' ')
+                .map(part => part
+                    .split(/([-'])/g)
+                    .map(seg => (seg === '-' || seg === "'") ? seg : (seg ? seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase() : ''))
+                    .join('')
+                )
+                .join(' ');
         }
 
         function capitalizeNameField(e) {
             const input = e.target;
-            input.value = capitalizeFirstLetter(input.value);
+            input.value = capitalizeName(input.value);
+        }
+
+        function isValidEmail(email) {
+            const v = String(email || '').trim();
+            // Reasonable email validation (tighter than HTML5 default, but not overly strict)
+            return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(v);
         }
 
         // ========== TOGGLE SWITCH FUNCTIONALITY ==========
@@ -1015,20 +1091,17 @@ if (isset($_SESSION['user_id'])) {
             const toggle = document.querySelector('.student-type-toggle');
             const highlight = document.querySelector('.toggle-highlight');
             const newStudent = document.getElementById('newStudent');
-            const oldStudent = document.getElementById('oldStudent');
             const transferee = document.getElementById('transferee');
             
             if (!toggle || !highlight) return;
             
             const toggleWidth = toggle.offsetWidth;
-            const optionWidth = (toggleWidth - 10) / 3; // Account for padding
+            const optionWidth = (toggleWidth - 10) / 2; // Account for padding
             
             if (newStudent && newStudent.checked) {
                 highlight.style.left = '5px';
-            } else if (oldStudent && oldStudent.checked) {
-                highlight.style.left = (optionWidth + 5) + 'px';
             } else if (transferee && transferee.checked) {
-                highlight.style.left = (optionWidth * 2 + 5) + 'px';
+                highlight.style.left = (optionWidth + 5) + 'px';
             }
         }
 
@@ -1048,6 +1121,7 @@ if (isset($_SESSION['user_id'])) {
             const birthYear = document.getElementById('birthYear');
             const agreeCheckbox = document.getElementById('agreeTerms');
             const proceedBtn = document.getElementById('proceedBtn');
+            const loadingOverlay = document.getElementById('enrollmentLoadingOverlay');
 
             // ----- Toggle Switch Event Listeners -----
             const studentTypeRadios = document.querySelectorAll('input[name="studentType"]');
@@ -1065,6 +1139,7 @@ if (isset($_SESSION['user_id'])) {
             const firstNameInput = document.getElementById('firstName');
             const middleNameInput = document.getElementById('middleName');
             const lastNameInput = document.getElementById('lastName');
+            const emailInput = document.getElementById('enrollEmail');
             
             if (firstNameInput) {
                 firstNameInput.addEventListener('blur', capitalizeNameField);
@@ -1076,6 +1151,38 @@ if (isset($_SESSION['user_id'])) {
                 lastNameInput.addEventListener('blur', capitalizeNameField);
             }
 
+            // Email normalization (trim) on blur
+            if (emailInput) {
+                emailInput.addEventListener('blur', (e) => {
+                    e.target.value = String(e.target.value || '').trim();
+                });
+            }
+
+            function showEnrollmentError(message, focusEl = null) {
+                const errorDiv = document.getElementById('enrollmentError');
+                if (errorDiv) {
+                    errorDiv.textContent = message;
+                    errorDiv.classList.add('show');
+                }
+
+                // Scroll to top of the enrollment form area so the error is visible
+                const leftPanel = document.querySelector('.enrollment-left');
+                if (leftPanel) {
+                    leftPanel.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+
+                if (focusEl && typeof focusEl.focus === 'function') {
+                    setTimeout(() => {
+                        try {
+                            focusEl.focus({ preventScroll: true });
+                            focusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } catch (_) {}
+                    }, 50);
+                }
+            }
+
             // Enable proceed button when terms are agreed
             if (agreeCheckbox && proceedBtn) {
                 agreeCheckbox.addEventListener('change', function() {
@@ -1083,19 +1190,9 @@ if (isset($_SESSION['user_id'])) {
                 });
             }
 
-            // Populate days based on month/year
+            // Birthdate day is manually entered now, so no dynamic day dropdown is needed.
             function populateDays() {
-                const month = birthMonth.value;
-                const year = birthYear.value || new Date().getFullYear();
-                const daysInMonth = new Date(year, month, 0).getDate();
-                const currentDay = birthDay.value;
-                
-                birthDay.innerHTML = '<option value="">Day</option>';
-                for (let i = 1; i <= daysInMonth; i++) {
-                    const dayValue = i.toString().padStart(2, '0');
-                    const selected = (currentDay === dayValue) ? 'selected' : '';
-                    birthDay.innerHTML += `<option value="${dayValue}" ${selected}>${i}</option>`;
-                }
+                // no-op: manual day entry is handled by the birthDay number input
             }
 
             // Helper: calculate age from full birthdate
@@ -1113,16 +1210,29 @@ if (isset($_SESSION['user_id'])) {
 
             // When month, day, or year changes, calculate age from birthdate
             function handleBirthdateChange() {
-                populateDays();
-                
-                const year = parseInt(birthYear.value);
+                const year = parseInt(birthYear.value, 10);
                 const month = birthMonth.value;
                 const day = birthDay.value;
+
+                if (day) {
+                    const dayValue = parseInt(day, 10);
+                    if (!Number.isNaN(dayValue)) {
+                        if (dayValue < 1) birthDay.value = '1';
+                        if (dayValue > 31) birthDay.value = '31';
+                    }
+                }
                 
                 if (year && month && day) {
                     const newAge = calculateAgeFromBirthdate(year, month, day);
                     if (newAge !== null && newAge >= 0) {
                         ageInput.value = newAge;
+                        const minAge = 8;
+                        const maxAge = 50;
+                        if (newAge < minAge || newAge > maxAge) {
+                            birthYear.setCustomValidity('Age must be between 8 and 50 years old.');
+                        } else {
+                            birthYear.setCustomValidity('');
+                        }
                     } else {
                         ageInput.value = '';
                     }
@@ -1132,6 +1242,7 @@ if (isset($_SESSION['user_id'])) {
             }
 
             birthMonth.addEventListener('change', handleBirthdateChange);
+            birthDay.addEventListener('input', handleBirthdateChange);
             birthDay.addEventListener('change', handleBirthdateChange);
             birthYear.addEventListener('input', handleBirthdateChange);
 
@@ -1196,6 +1307,83 @@ if (isset($_SESSION['user_id'])) {
                 });
             }
 
+            // Save enrollment form data to localStorage on input change
+            function saveEnrollmentFormData() {
+                const formData = {
+                    firstName: document.getElementById('firstName')?.value || '',
+                    middleName: document.getElementById('middleName')?.value || '',
+                    lastName: document.getElementById('lastName')?.value || '',
+                    suffix: document.getElementById('suffix')?.value || '',
+                    age: document.getElementById('age')?.value || '',
+                    gender: document.getElementById('gender')?.value || '',
+                    birthMonth: document.getElementById('birthMonth')?.value || '',
+                    birthDay: document.getElementById('birthDay')?.value || '',
+                    birthYear: document.getElementById('birthYear')?.value || '',
+                    grade: document.getElementById('grade')?.value || '',
+                    strand: document.getElementById('strand')?.value || '',
+                    lrn: document.getElementById('lrn')?.value || '',
+                    enrollEmail: document.getElementById('enrollEmail')?.value || '',
+                    phone: document.getElementById('phone')?.value || '',
+                    agreeTerms: document.getElementById('agreeTerms')?.checked || false,
+                    timestamp: Date.now() // Store timestamp for 24-hour expiration
+                };
+                localStorage.setItem('enrollmentFormData', JSON.stringify(formData));
+            }
+
+            // Restore enrollment form data from localStorage
+            function restoreEnrollmentFormData() {
+                const savedData = localStorage.getItem('enrollmentFormData');
+                if (!savedData) return;
+
+                try {
+                    const data = JSON.parse(savedData);
+                    const now = Date.now();
+                    const savedTime = data.timestamp || 0;
+                    const oneDay = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+                    // Check if data is more than 24 hours old
+                    if (now - savedTime > oneDay) {
+                        localStorage.removeItem('enrollmentFormData');
+                        return;
+                    }
+
+                    // Restore form values
+                    if (document.getElementById('firstName')) document.getElementById('firstName').value = data.firstName || '';
+                    if (document.getElementById('middleName')) document.getElementById('middleName').value = data.middleName || '';
+                    if (document.getElementById('lastName')) document.getElementById('lastName').value = data.lastName || '';
+                    if (document.getElementById('suffix')) document.getElementById('suffix').value = data.suffix || '';
+                    if (document.getElementById('age')) document.getElementById('age').value = data.age || '';
+                    if (document.getElementById('gender')) document.getElementById('gender').value = data.gender || '';
+                    if (document.getElementById('birthMonth')) document.getElementById('birthMonth').value = data.birthMonth || '';
+                    if (document.getElementById('birthDay')) document.getElementById('birthDay').value = data.birthDay || '';
+                    if (document.getElementById('birthYear')) document.getElementById('birthYear').value = data.birthYear || '';
+                    if (document.getElementById('grade')) {
+                        document.getElementById('grade').value = data.grade || '';
+                        handleGradeChange();
+                    }
+                    if (document.getElementById('strand')) document.getElementById('strand').value = data.strand || '';
+                    if (document.getElementById('lrn')) document.getElementById('lrn').value = data.lrn || '';
+                    if (document.getElementById('enrollEmail')) document.getElementById('enrollEmail').value = data.enrollEmail || '';
+                    if (document.getElementById('phone')) document.getElementById('phone').value = data.phone || '';
+                    if (document.getElementById('agreeTerms')) document.getElementById('agreeTerms').checked = data.agreeTerms || false;
+                } catch (e) {
+                    console.error('Error restoring form data:', e);
+                }
+            }
+
+            // Attach save handler to all form inputs
+            const enrollmentInputs = enrollmentForm?.querySelectorAll('input, select, textarea');
+            if (enrollmentInputs) {
+                enrollmentInputs.forEach(input => {
+                    input.addEventListener('change', saveEnrollmentFormData);
+                    input.addEventListener('input', saveEnrollmentFormData);
+                });
+            }
+
+            // Restore form data on page load
+            window.addEventListener('DOMContentLoaded', restoreEnrollmentFormData);
+            restoreEnrollmentFormData(); // Also call immediately in case already loaded
+
             // Form submission
             enrollmentForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -1206,69 +1394,83 @@ if (isset($_SESSION['user_id'])) {
                 }
 
                 // Validate first name and last name
-                const firstName = document.getElementById('firstName').value.trim();
-                const lastName = document.getElementById('lastName').value.trim();
+                const firstNameEl = document.getElementById('firstName');
+                const middleNameEl = document.getElementById('middleName');
+                const lastNameEl = document.getElementById('lastName');
+                const emailEl = document.getElementById('enrollEmail');
+
+                const firstName = capitalizeName(firstNameEl?.value);
+                const middleName = capitalizeName(middleNameEl?.value);
+                const lastName = capitalizeName(lastNameEl?.value);
+
+                if (firstNameEl) firstNameEl.value = firstName;
+                if (middleNameEl) middleNameEl.value = middleName;
+                if (lastNameEl) lastNameEl.value = lastName;
                 
                 if (!firstName) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please enter your first name.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please enter your first name.', firstNameEl);
                     return;
                 }
                 
                 if (!lastName) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please enter your last name.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please enter your last name.', lastNameEl);
+                    return;
+                }
+
+                // Validate email
+                const emailValue = String(emailEl?.value || '').trim();
+                if (emailEl) emailEl.value = emailValue;
+                if (!emailValue) {
+                    showEnrollmentError('Please enter your email address.', emailEl);
+                    return;
+                }
+                if (!isValidEmail(emailValue)) {
+                    showEnrollmentError('Please enter a valid email address (example: name@gmail.com).', emailEl);
                     return;
                 }
 
                 // Validate file upload
                 if (fileInput.files.length === 0) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please upload at least one document.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please upload at least one document.', fileInput);
                     return;
                 }
 
                 // Validate grade selection
                 if (!gradeSelect.value) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please select a grade level.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please select a grade level.', gradeSelect);
                     return;
                 }
 
                 // Validate strand for Grades 11-12
                 const selectedGrade = parseInt(gradeSelect.value);
                 if ((selectedGrade === 11 || selectedGrade === 12) && !strandSelect.value) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please select a strand for Senior High School (Grade 11-12).';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please select a strand for Senior High School (Grade 11-12).', strandSelect);
+                    return;
+                }
+
+                // Validate LRN
+                const lrnValue = document.getElementById('lrn').value.trim();
+                if (!lrnValue || lrnValue.length !== 12 || !/^\d{12}$/.test(lrnValue)) {
+                    showEnrollmentError('LRN must be exactly 12 digits.', document.getElementById('lrn'));
                     return;
                 }
 
                 // Validate birthdate
                 if (!birthYear.value || !birthMonth.value || !birthDay.value) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please complete the birthdate fields.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please complete the birthdate fields.', birthMonth);
+                    return;
+                }
+
+                const birthAge = calculateAgeFromBirthdate(parseInt(birthYear.value, 10), birthMonth.value, birthDay.value);
+                if (birthAge === null || birthAge < 8 || birthAge > 50) {
+                    showEnrollmentError('Please enter a valid birthdate: age must be between 8 and 50 years old.', birthYear);
                     return;
                 }
 
                 // Validate file sizes
                 for (let file of fileInput.files) {
                     if (file.size > 5 * 1024 * 1024) {
-                        if (errorDiv) {
-                            errorDiv.textContent = 'Each file must be less than 5MB.';
-                            errorDiv.classList.add('show');
-                        }
+                        showEnrollmentError('Each file must be less than 5MB.', fileInput);
                         return;
                     }
                 }
@@ -1276,24 +1478,17 @@ if (isset($_SESSION['user_id'])) {
                 // Validate phone number format
                 const phone = phoneInput.value;
                 if (phone.length !== 10) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Phone number must be 10 digits.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Phone number must be 10 digits.', phoneInput);
                     return;
                 }
 
                 const recaptchaToken = typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : '';
                 if (!recaptchaToken) {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Please complete the reCAPTCHA.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('Please complete the reCAPTCHA.');
                     return;
                 }
 
                 // Combine name fields into full name for submission
-                const middleName = document.getElementById('middleName').value.trim();
                 const suffix = document.getElementById('suffix').value;
                 
                 let fullName = `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`;
@@ -1317,6 +1512,7 @@ if (isset($_SESSION['user_id'])) {
                 const birthdate = `${birthYear.value}-${birthMonth.value}-${birthDay.value}`;
                 formData.append('birthdate', birthdate);
                 formData.append('grade', gradeSelect.value);
+                formData.append('lrn', lrnValue);
                 formData.append('strand', strandSelect.value || '');
                 formData.append('email', document.getElementById('enrollEmail').value);
                 formData.append('phone', '+63' + phone);
@@ -1328,6 +1524,10 @@ if (isset($_SESSION['user_id'])) {
                 formData.append('g-recaptcha-response', recaptchaToken);
 
                 try {
+                    const submitBtn = enrollmentForm.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.disabled = true;
+                    if (loadingOverlay) loadingOverlay.classList.add('show');
+
                     const response = await fetch('php/handle_enrollment.php', {
                         method: 'POST',
                         body: formData
@@ -1346,29 +1546,32 @@ if (isset($_SESSION['user_id'])) {
                     }
 
                     if (result.success) {
+                        // Clear saved form data on successful submission
+                        localStorage.removeItem('enrollmentFormData');
                         document.getElementById('enrollmentForm').style.display = 'none';
                         const successDiv = document.getElementById('enrollmentSuccess');
                         if (successDiv) {
                             successDiv.classList.add('show');
+                            // Hide the small arrow-style "Back to Home" link to avoid duplicate actions
+                            const backToLandingLink = document.querySelector('.back-to-landing');
+                            if (backToLandingLink) backToLandingLink.style.display = 'none';
                         }
                     } else {
                         if (typeof grecaptcha !== 'undefined' && grecaptcha.reset) {
                             grecaptcha.reset();
                         }
-                        if (errorDiv) {
-                            errorDiv.textContent = result.message || 'An error occurred. Please try again.';
-                            errorDiv.classList.add('show');
-                        }
+                        showEnrollmentError(result.message || 'An error occurred. Please try again.');
                     }
                 } catch (error) {
                     console.error('Error:', error);
                     if (typeof grecaptcha !== 'undefined' && grecaptcha.reset) {
                         grecaptcha.reset();
                     }
-                    if (errorDiv) {
-                        errorDiv.textContent = 'An error occurred while processing your enrollment. Please try again.';
-                        errorDiv.classList.add('show');
-                    }
+                    showEnrollmentError('An error occurred while processing your enrollment. Please try again.');
+                } finally {
+                    const submitBtn = enrollmentForm.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.disabled = false;
+                    if (loadingOverlay) loadingOverlay.classList.remove('show');
                 }
             });
         });
@@ -1386,41 +1589,35 @@ if (isset($_SESSION['user_id'])) {
             
             requirementsList.innerHTML = '';
             
-            // Junior High School Requirements (Grades 7-10)
-            const jhsRequirements = [
-                'PSA Birth Certificate (Original and Photocopy)',
-                '2x2 ID Pictures (2 pieces, white background)',
-                'Report Card / Form 138 (Original) from previous school',
-                'Good Moral Certificate from previous school',
-                'Photocopy of Parent/Guardian Valid ID',
-                'Completed Enrollment Form',
-                'Proof of Payment for Enrollment Fee'
+            // Common required documents for all grade levels (7-12)
+            const commonRequirements = [
+                'Accomplished Application Form',
+                'Accomplished ESC Application Form',
+                'PSA Birth Certificate (Original Copy)',
+                'Report Card SF9 (Original Copy)',
+                'Certificate of Good Moral Standing (Original Copy)',
+                'Certificate of Transfer Credentials or Honorable Dismissal (Original copy)',
+                '4 pieces of 2x2 picture with white background'
             ];
             
-            // Senior High School Requirements (Grades 11-12)
-            const shsRequirements = [
-                'PSA Birth Certificate (Original and Photocopy)',
-                '2x2 ID Pictures (2 pieces, white background)',
-                'Report Card / Form 138 (Original) from Junior High School',
-                'Certificate of Completion from Grade 10',
-                'Good Moral Certificate from Junior High School',
-                'ESC Certificate (if applicable)',
-                'Voucher Certificate (if applicable)',
-                'Photocopy of Parent/Guardian Valid ID',
-                'Completed Enrollment Form',
-                'Proof of Payment for Enrollment Fee',
-                'Choice of Strand (STEM, ABM, HUMSS)'
-            ];
-            
-            let requirements = [];
+            let requirements = [...commonRequirements];
             let gradeText = '';
+            const parsedGrade = parseInt(gradeLevel, 10);
             
-            if (gradeLevel >= 7 && gradeLevel <= 10) {
-                requirements = jhsRequirements;
-                gradeText = 'Junior High School (Grade ' + gradeLevel + ')';
-            } else if (gradeLevel >= 11 && gradeLevel <= 12) {
-                requirements = shsRequirements;
-                gradeText = 'Senior High School (Grade ' + gradeLevel + ')';
+            // Grade-specific requirements
+            if (parsedGrade === 7) {
+                requirements.push('Diploma (for JHS Grade 7 Applicants) (Photocopy)');
+                requirements.push('Parents Proof of Income (for Grade 7 ESC Grant Applicants)');
+            }
+            
+            if (parsedGrade === 11) {
+                requirements.push('Certificate of Completion (for SHS Grade 11 Applicants) (Photocopy)');
+            }
+            
+            if (parsedGrade >= 7 && parsedGrade <= 10) {
+                gradeText = 'Junior High School (Grade ' + parsedGrade + ')';
+            } else if (parsedGrade >= 11 && parsedGrade <= 12) {
+                gradeText = 'Senior High School (Grade ' + parsedGrade + ')';
             }
             
             requirements.forEach(req => {
@@ -1650,6 +1847,63 @@ if (isset($_SESSION['user_id'])) {
             if (loginPage) loginPage.style.display = 'block';
             if (enrollmentPage) enrollmentPage.style.display = 'none';
             if (dashboardPage) dashboardPage.style.display = 'none';
+        }
+
+        // If the page is loaded with a login error, keep user on login page
+        (function ensureLoginVisibleOnError() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (params.has('error')) {
+                    showLogin();
+                    window.scrollTo({ top: 0, behavior: 'auto' });
+                }
+            } catch (_) {}
+        })();
+
+        // Handle login form submission with AJAX
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const username = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                const errorDiv = document.getElementById('loginErrorMessage');
+
+                if (!username || !password) {
+                    errorDiv.textContent = 'Please enter both username/email and password.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                try {
+                    const formData = new FormData();
+                    formData.append('email', username);
+                    formData.append('password', password);
+
+                    const response = await fetch('php/login.php', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // Redirect to dashboard
+                        window.location.href = result.redirect;
+                    } else {
+                        // Show error message without redirecting
+                        errorDiv.textContent = result.message || 'Login failed. Please try again.';
+                        errorDiv.style.display = 'block';
+                        // Scroll to error
+                        errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    errorDiv.textContent = 'An error occurred. Please try again.';
+                    errorDiv.style.display = 'block';
+                }
+            });
         }
     </script>
 </body>

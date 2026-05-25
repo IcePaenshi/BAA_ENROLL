@@ -54,6 +54,9 @@ switch ($action) {
     case 'update_teacher_subjects':
         handleUpdateTeacherSubjects();
         break;
+    case 'delete':
+        handleDeleteUser();
+        break;
     default:
         ob_end_clean();
         echo json_encode(['success' => false, 'message' => 'Invalid action']);
@@ -75,6 +78,7 @@ function handleCreateUser() {
     $gradeLevel = trim($_POST['gradeLevel'] ?? '');
     $section = trim($_POST['section'] ?? '');
     $lrn = trim($_POST['lrn'] ?? '');
+    $lrn = preg_replace('/\D/', '', $lrn);
 
     // Enrollment fields (still needed for validation)
     $age = trim($_POST['age'] ?? '');
@@ -149,7 +153,10 @@ function handleCreateUser() {
             $errors[] = 'Invalid section for selected grade level';
         }
         
-        // LRN is optional for students
+        // LRN is optional for students, but if provided it must be exactly 12 digits
+        if ($lrn !== '' && !preg_match('/^\d{12}$/', $lrn)) {
+            $errors[] = 'LRN must be exactly 12 digits';
+        }
 
         if (empty($gender) || !in_array($gender, ['Male', 'Female'])) {
             $errors[] = 'Gender is required';
@@ -164,8 +171,8 @@ function handleCreateUser() {
                 $errors[] = 'Invalid birthdate format';
             } else {
                 $computedAge = baa_age_from_birthdate_years($birthdate);
-                if ($computedAge === null || $computedAge < 1 || $computedAge > 120) {
-                    $errors[] = 'Invalid birthdate or age out of range';
+                if ($computedAge === null || $computedAge < 8 || $computedAge > 50) {
+                    $errors[] = 'Age must be between 8 and 50 years old';
                 }
             }
         }
@@ -203,8 +210,8 @@ function handleCreateUser() {
                 $errors[] = 'Invalid birthdate format';
             } else {
                 $computedAge = baa_age_from_birthdate_years($birthdate);
-                if ($computedAge === null || $computedAge < 1 || $computedAge > 120) {
-                    $errors[] = 'Invalid birthdate or age out of range';
+                if ($computedAge === null || $computedAge < 8 || $computedAge > 50) {
+                    $errors[] = 'Age must be between 8 and 50 years old';
                 }
             }
         }
@@ -353,11 +360,41 @@ function handleUpdateTeacherSubjects() {
 
     $teacherId = $_POST['teacher_id'] ?? '';
     $subjectIds = $_POST['subject_ids'] ?? [];
+    $teacherGradeLevel = trim((string) ($_POST['teacher_grade_level'] ?? ''));
+    $teacherSection = trim((string) ($_POST['teacher_section'] ?? ''));
 
     if (empty($teacherId)) {
         ob_end_clean();
         echo json_encode(['success' => false, 'message' => 'Missing teacher ID']);
         exit();
+    }
+
+    $gradeSections = [
+        'Grade 7' => ['Love', 'Joy'],
+        'Grade 8' => ['Patience', 'Peace'],
+        'Grade 9' => ['Goodness', 'Kindness'],
+        'Grade 10' => ['Gentleness', 'Faithfulness'],
+        'Grade 11' => ['Self-Control', 'Honesty'],
+        'Grade 12' => ['Humility', 'Meekness'],
+    ];
+
+    if (($teacherGradeLevel === '' && $teacherSection !== '') || ($teacherGradeLevel !== '' && $teacherSection === '')) {
+        ob_end_clean();
+        echo json_encode(['success' => false, 'message' => 'Please select both teacher grade level and section']);
+        exit();
+    }
+
+    if ($teacherGradeLevel !== '') {
+        if (!array_key_exists($teacherGradeLevel, $gradeSections)) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Invalid teacher grade level']);
+            exit();
+        }
+        if (!in_array($teacherSection, $gradeSections[$teacherGradeLevel], true)) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Invalid teacher section for selected grade']);
+            exit();
+        }
     }
 
     // Ensure subject_ids is an array
@@ -401,10 +438,70 @@ function handleUpdateTeacherSubjects() {
             }
         }
 
+        $teacherGradeLevelDb = $teacherGradeLevel !== '' ? $teacherGradeLevel : null;
+        $teacherSectionDb = $teacherSection !== '' ? $teacherSection : null;
+        $updateTeacherStmt = $pdo->prepare("UPDATE users SET teacher_grade_level = ?, teacher_section = ? WHERE id = ? AND role = 'teacher'");
+        $updateTeacherStmt->execute([$teacherGradeLevelDb, $teacherSectionDb, $teacherId]);
+
         $pdo->commit();
 
         ob_end_clean();
         echo json_encode(['success' => true, 'message' => 'Teacher subjects updated successfully']);
+    } catch(PDOException $e) {
+        $pdo->rollBack();
+        ob_end_clean();
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+function handleDeleteUser() {
+    global $pdo;
+
+    $userId = $_POST['user_id'] ?? null;
+    
+    if (!$userId) {
+        ob_end_clean();
+        echo json_encode(['success' => false, 'message' => 'User ID is required']);
+        exit();
+    }
+
+    try {
+        // Verify user exists and get status and role
+        $stmt = $pdo->prepare("SELECT id, status, role FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'User not found']);
+            exit();
+        }
+
+        // Only allow deletion of inactive users (status = 0)
+        if ((int)$user['status'] !== 0) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Only inactive users can be deleted']);
+            exit();
+        }
+
+        // Start transaction for cleanup
+        $pdo->beginTransaction();
+
+        // Delete related records first
+        // Delete teacher subjects
+        if ($user['role'] === 'teacher') {
+            $stmt = $pdo->prepare("DELETE FROM teacher_subjects WHERE teacher_id = ?");
+            $stmt->execute([$userId]);
+        }
+
+        // Delete the user
+        $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+
+        $pdo->commit();
+
+        ob_end_clean();
+        echo json_encode(['success' => true, 'message' => 'User deleted successfully']);
     } catch(PDOException $e) {
         $pdo->rollBack();
         ob_end_clean();

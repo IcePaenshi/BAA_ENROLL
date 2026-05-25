@@ -405,8 +405,19 @@ session_start();
         }
 
         @media (max-width: 768px) {
+            .enrollment-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+            }
+            
+            .enrollment-right {
+                display: none;
+            }
+
             .enrollment-left {
                 padding: 30px 20px;
+                max-height: 100vh;
+                border-bottom: none;
             }
 
             .enrollment-logo img {
@@ -465,7 +476,7 @@ session_start();
                         <!-- Age -->
                         <div class="enroll-input-group">
                             <label for="age">Age *</label>
-                            <input type="number" id="age" name="age" min="1" max="120" required placeholder="Enter your age">
+                            <input type="number" id="age" name="age" min="8" max="50" required placeholder="Age will be computed from birthdate" readonly>
                         </div>
 
                         <!-- Gender -->
@@ -566,6 +577,30 @@ session_start();
             const strandPicker = document.getElementById('strandPicker');
             const strandSelect = document.getElementById('strand');
             const submitBtn = document.getElementById('submitBtn');
+
+            // Birthdate restrictions and age auto-computation (8 to 50 years old)
+            const birthdateInput = document.getElementById('birthdate');
+            const ageInput = document.getElementById('age');
+            
+            const today = new Date();
+            const maxYear = today.getFullYear() - 8;
+            const minYear = today.getFullYear() - 50;
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            
+            birthdateInput.setAttribute('min', `${minYear}-${month}-${day}`);
+            birthdateInput.setAttribute('max', `${maxYear}-${month}-${day}`);
+            
+            birthdateInput.addEventListener('change', function() {
+                if (!this.value) return;
+                const dob = new Date(this.value);
+                let computedAge = today.getFullYear() - dob.getFullYear();
+                const m = today.getMonth() - dob.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+                    computedAge--;
+                }
+                ageInput.value = computedAge;
+            });
 
             // Grade level change handler
             gradeSelect.addEventListener('change', function() {

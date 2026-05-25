@@ -13,12 +13,12 @@ try {
         SELECT 
             id,
             title,
-            description,
+            content AS description,
             event_date,
             location,
             created_at
-        FROM events 
-        WHERE event_date >= CURDATE()
+        FROM announcements 
+        WHERE event_date IS NOT NULL AND event_date >= CURDATE()
         ORDER BY event_date ASC
         LIMIT 10
     ");

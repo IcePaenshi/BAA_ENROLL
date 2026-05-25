@@ -3,13 +3,13 @@ require_once 'db.php';
 
 try {
     // Alter the users table to add name fields
-    $pdo->exec("ALTER TABLE users ADD COLUMN first_name VARCHAR(50) AFTER password");
-    $pdo->exec("ALTER TABLE users ADD COLUMN middle_name VARCHAR(50) AFTER first_name");
-    $pdo->exec("ALTER TABLE users ADD COLUMN last_name VARCHAR(50) AFTER middle_name");
-    $pdo->exec("ALTER TABLE users ADD COLUMN suffix VARCHAR(10) AFTER last_name");
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN first_name VARCHAR(50) AFTER password"); } catch (PDOException $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN middle_name VARCHAR(50) AFTER first_name"); } catch (PDOException $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN last_name VARCHAR(50) AFTER middle_name"); } catch (PDOException $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN suffix VARCHAR(10) AFTER last_name"); } catch (PDOException $e) {}
     
     // Update the users table role enum
-    $pdo->exec("ALTER TABLE users MODIFY COLUMN role ENUM('student', 'teacher', 'cashier', 'registrar', 'admin') DEFAULT 'student'");
+    try { $pdo->exec("ALTER TABLE users MODIFY COLUMN role ENUM('student', 'teacher', 'cashier', 'registrar', 'admin') DEFAULT 'student'"); } catch (PDOException $e) {}
     
     echo "✅ Updated users table structure and role enum<br>";
     
@@ -74,6 +74,14 @@ try {
     )");
     
     echo "✅ Created payables table<br>";
+    
+    // Ensure payments table has payment_type column
+    $stmt = $pdo->query("DESCRIBE payments");
+    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('payment_type', $columns)) {
+        $pdo->exec("ALTER TABLE payments ADD COLUMN payment_type VARCHAR(20) NOT NULL DEFAULT 'payment' AFTER amount");
+        echo "✅ Added payment_type column to payments table<br>";
+    }
     
     // Create attendance table if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS attendance (

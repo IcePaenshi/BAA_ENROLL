@@ -259,12 +259,25 @@ async function loadProfile() {
     }
 }
 
+function getAnnouncementApiUrl(endpoint) {
+    const basePath = window.location.pathname.replace(/\/[^\/\?#]+$/, '').replace(/\/$/, '');
+    return `${window.location.origin}${basePath}/php/${endpoint}`;
+}
+
 async function loadAnnouncements() {
     try {
-        const response = await fetch('php/get_announcements.php');
+        const response = await fetch(getAnnouncementApiUrl('get_announcements.php'), { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
         const data = await response.json();
         
-        if (data.success && data.announcements) {
+        if (!data || !data.success) {
+            console.warn('Failed to load announcements from script.js', data);
+            const announcementList = document.getElementById('announcementList');
+            if (announcementList) {
+                announcementList.innerHTML = '<div class="error">Failed to load announcements</div>';
+            }
+            return;
+        }
+        if (data.announcements) {
             const announcementList = document.getElementById('announcementList');
             if (announcementList) {
                 announcementList.innerHTML = data.announcements.map(announcement => `
@@ -306,6 +319,11 @@ function navigateTo(page) {
     menuItems.forEach(item => {
         item.classList.remove('active');
     });
+
+    // Remove active class from all dashboard cards so inline display styles apply
+    document.querySelectorAll('.dashboard-card').forEach(card => {
+        card.classList.remove('active');
+    });
     
     // Add active class to clicked menu item
     const clickedItem = document.getElementById(`menu-${page}`);
@@ -321,26 +339,57 @@ function navigateTo(page) {
     const users = document.querySelector('.users-card');
     const payables = document.querySelector('.payables-management-card');
     const payments = document.querySelector('.payments-card');
+    const gradeSubmissions = document.getElementById('gradeSubmissionsCard');
+    const tuitionFees = document.getElementById('tuitionFeeManagerCard');
+    const documents = document.getElementById('documentManagementCard');
+    const sectionsSubjects = document.getElementById('sectionsSubjectsCard');
+    const grantsDiscounts = document.getElementById('grantsDiscountsCard');
+
+    // Helper: show/hide cards that use Tailwind 'hidden' class
+    function showCard(el, show) {
+        if (!el) return;
+        if (show) { el.classList.remove('hidden'); el.style.display = 'block'; }
+        else      { el.classList.add('hidden');    el.style.display = 'none';  }
+    }
+    function showCardFlex(el, show) {
+        if (!el) return;
+        if (show) { el.classList.remove('hidden'); el.style.display = 'flex'; }
+        else      { el.classList.add('hidden');    el.style.display = 'none';  }
+    }
 
     if (page === 'home') {
         if (dashboardLeft) dashboardLeft.style.display = 'block';
         if (dashboardRight) dashboardRight.style.display = 'block';
-        if (enrollment) enrollment.style.display = 'flex';
-        if (profile) profile.style.display = 'none';
-        if (users) users.style.display = 'none';
-        if (payables) payables.style.display = 'none';
-        if (payments) payments.style.display = 'none';
+        showCardFlex(enrollment, true);
+        showCardFlex(profile, false);
+        showCardFlex(users, false);
+        showCardFlex(payables, false);
+        showCardFlex(payments, false);
+        showCard(gradeSubmissions, false);
+        showCard(tuitionFees, false);
+        showCard(documents, false);
+        showCard(sectionsSubjects, false);
+        showCard(grantsDiscounts, false);
         if (typeof loadEnrollments === 'function') {
             loadEnrollments();
         }
     } else {
         if (dashboardLeft) dashboardLeft.style.display = 'none';
         if (dashboardRight) dashboardRight.style.display = 'none';
-        if (enrollment) enrollment.style.display = 'none';
-        if (profile) profile.style.display = page === 'profile' ? 'flex' : 'none';
-        if (users) users.style.display = page === 'users' ? 'flex' : 'none';
-        if (payables) payables.style.display = page === 'payables' ? 'flex' : 'none';
-        if (payments) payments.style.display = page === 'payments' ? 'flex' : 'none';
+        showCardFlex(enrollment, false);
+        showCardFlex(profile, page === 'profile');
+        showCardFlex(users, page === 'users');
+        showCardFlex(payables, page === 'payables');
+        showCardFlex(payments, page === 'payments');
+        showCard(gradeSubmissions, page === 'grade-submissions');
+        showCard(tuitionFees, page === 'tuition-fees');
+        showCard(documents, page === 'documents');
+        showCard(sectionsSubjects, page === 'sections-subjects');
+        showCard(grantsDiscounts, page === 'grants-discounts');
+        
+        if (page === 'grade-submissions') {
+            if (typeof loadGradeSubmissions === 'function') loadGradeSubmissions();
+        }
         if (page === 'profile') {
             loadProfile();
         }
@@ -363,6 +412,51 @@ function navigateTo(page) {
 
     return;
 }
+
+    // ---- TEACHER MODE ----
+    const teacherHome = document.getElementById('teacherHomeCard');
+    if (teacherHome) {
+        // All teacher cards
+        const teacherCardIds = ['teacherHomeCard', 'teacherGradeEncodingCard', 'teacherAttendanceCard'];
+        const teacherPageMap = {
+            'home':           'teacherHomeCard',
+            'grade-encoding': 'teacherGradeEncodingCard',
+            'attendance':     'teacherAttendanceCard'
+        };
+
+        // Hide all teacher cards
+        teacherCardIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+        });
+
+        // Show the target card
+        const targetId = teacherPageMap[page];
+        if (targetId) {
+            const target = document.getElementById(targetId);
+            if (target) target.classList.add('active');
+        }
+
+        // Profile page uses the shared profile card
+        if (page === 'profile') {
+            const pc = document.querySelector('.profile-card');
+            if (pc) { pc.style.display = 'flex'; loadProfile(); }
+        } else {
+            const pc = document.querySelector('.profile-card');
+            if (pc) pc.style.display = 'none';
+        }
+
+        // When navigating to grade-encoding, try to reload last session
+        if (page === 'grade-encoding') {
+            if (typeof autoLoadGradeStudents === 'function') {
+                // Only reload if a subject is already selected
+                const subj = document.getElementById('gradeSubjectSelect');
+                if (subj && subj.value) autoLoadGradeStudents();
+            }
+        }
+
+        return;
+    }
 
 
     // Get dashboard container

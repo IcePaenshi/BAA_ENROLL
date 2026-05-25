@@ -63,7 +63,15 @@ function baa_portal_base_url(): string
 /**
  * @return array{0:bool,1:string} [success, message]
  */
-function baa_send_student_credentials_mail(string $toEmail, string $toDisplayName, string $username, string $plainPassword): array
+function baa_send_student_credentials_mail(
+    string $toEmail,
+    string $toDisplayName,
+    string $username,
+    string $plainPassword,
+    ?string $assessmentAttachmentPath = null,
+    ?string $enrollmentId = null,
+    ?string $gradeLevel = null
+): array
 {
     $cfg = baa_load_mail_config();
     if ($cfg['smtp_pass'] === '' || $cfg['smtp_pass'] === null) {
@@ -86,18 +94,44 @@ function baa_send_student_credentials_mail(string $toEmail, string $toDisplayNam
     $safePass = htmlspecialchars($plainPassword, ENT_QUOTES, 'UTF-8');
     $safeUrl = htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8');
 
-    $bodyHtml = '<p>Dear ' . $safeName . ',</p>'
-        . '<p>Your enrollment has been <strong>approved</strong>. You can sign in to the student portal with the credentials below.</p>'
-        . '<table cellpadding="8" cellspacing="0" style="border-collapse:collapse;margin:12px 0;">'
+    $appDetailsHtml = '';
+    $appDetailsText = '';
+    if ($enrollmentId && $gradeLevel) {
+        $dateStr = date('F j, Y');
+        $appDetailsHtml = "<h3>Application Details:</h3>
+<ul>
+    <li><strong>Full Name:</strong> {$safeName}</li>
+    <li><strong>Grade Level:</strong> " . htmlspecialchars($gradeLevel, ENT_QUOTES, 'UTF-8') . "</li>
+    <li><strong>Enrollment ID:</strong> " . htmlspecialchars($enrollmentId, ENT_QUOTES, 'UTF-8') . "</li>
+    <li><strong>Date Approved:</strong> {$dateStr}</li>
+</ul>";
+
+        $appDetailsText = "Application Details:\n"
+            . "- Full Name: {$toDisplayName}\n"
+            . "- Grade Level: {$gradeLevel}\n"
+            . "- Enrollment ID: {$enrollmentId}\n"
+            . "- Date Approved: {$dateStr}\n\n";
+    }
+
+    $credentialsHtml = '<table cellpadding="8" cellspacing="0" style="border-collapse:collapse;margin:12px 0;">'
         . '<tr><td style="border:1px solid #ccc;"><strong>Username</strong></td><td style="border:1px solid #ccc;">' . $safeUser . '</td></tr>'
         . '<tr><td style="border:1px solid #ccc;"><strong>Password</strong></td><td style="border:1px solid #ccc;">' . $safePass . '</td></tr>'
-        . '</table>'
-        . '<p>Please change your password after your first login if prompted.</p>'
+        . '</table>';
+
+    $bodyHtml = '<p>Dear ' . $safeName . ',</p>'
+        . '<p>Your enrollment has been <strong>approved</strong>.</p>'
+        . $appDetailsHtml
+        . '<p><strong>Student Portal Credentials:</strong></p>'
+        . $credentialsHtml
+        . '<p>You can sign in to the student portal using the credentials above.</p>'
+        . '<p>You will be required to change your password after your first login.</p>'
         . '<p><a href="' . $safeUrl . '">Open login page</a></p>'
         . '<p>Best regards,<br>Baesa Adventist Academy</p>';
 
     $bodyText = "Dear {$toDisplayName},\n\n"
-        . "Your enrollment has been approved. Sign in with:\n\n"
+        . "Your enrollment has been approved.\n\n"
+        . $appDetailsText
+        . "Sign in with:\n\n"
         . "Username: {$username}\n"
         . "Password: {$plainPassword}\n\n"
         . "Login: {$loginUrl}\n\n"
@@ -145,6 +179,9 @@ function baa_send_student_credentials_mail(string $toEmail, string $toDisplayNam
             $mail->Subject = 'Your student portal login - Baesa Adventist Academy';
             $mail->Body = $bodyHtml;
             $mail->AltBody = $bodyText;
+            if ($assessmentAttachmentPath && is_readable($assessmentAttachmentPath)) {
+                $mail->addAttachment($assessmentAttachmentPath, basename($assessmentAttachmentPath));
+            }
 
             $mail->send();
             return [true, ''];
@@ -158,4 +195,218 @@ function baa_send_student_credentials_mail(string $toEmail, string $toDisplayNam
         . 'not your normal Gmail password. The Google account must be exactly "' . ($cfg['smtp_user'] ?? '') . '". '
         . 'Save only the app password in php/mail_config.local.php (no quotes around it unless they are part of the password).';
     return [false, $lastError . $hint];
+}
+
+/**
+ * @param string[] $reasons
+ * @param string[] $missingDocs
+ * @return array{0:bool,1:string}
+ */
+function baa_send_enrollment_rejection_mail(
+    string $toEmail,
+    string $toDisplayName,
+    array $reasons,
+    array $missingDocs,
+    string $customMessage = ''
+): array {
+    $cfg = baa_load_mail_config();
+    if ($cfg['smtp_pass'] === '' || $cfg['smtp_pass'] === null) {
+        return [false, 'SMTP password not configured (add php/mail_config.local.php).'];
+    }
+
+    $mailRoot = __DIR__ . '/../PHPMailer/PHPMailer-master/src/';
+    if (!is_readable($mailRoot . 'PHPMailer.php')) {
+        return [false, 'PHPMailer library not found.'];
+    }
+
+    require_once $mailRoot . 'Exception.php';
+    require_once $mailRoot . 'PHPMailer.php';
+    require_once $mailRoot . 'SMTP.php';
+
+    $safeName = htmlspecialchars($toDisplayName, ENT_QUOTES, 'UTF-8');
+    $reasonsHtml = '';
+    foreach ($reasons as $reason) {
+        $reasonsHtml .= '<li>' . htmlspecialchars($reason, ENT_QUOTES, 'UTF-8') . '</li>';
+    }
+
+    $docsHtml = '';
+    if (!empty($missingDocs)) {
+        $docsHtml .= '<p><strong>Missing documents:</strong></p><ul>';
+        foreach ($missingDocs as $doc) {
+            $docsHtml .= '<li>' . htmlspecialchars($doc, ENT_QUOTES, 'UTF-8') . '</li>';
+        }
+        $docsHtml .= '</ul>';
+    }
+
+    $customHtml = '';
+    if ($customMessage !== '') {
+        $customHtml = '<p><strong>Additional note:</strong><br>' . nl2br(htmlspecialchars($customMessage, ENT_QUOTES, 'UTF-8')) . '</p>';
+    }
+
+    $bodyHtml = '<p>Dear ' . $safeName . ',</p>'
+        . '<p>Your enrollment request was not approved at this time due to the following reason(s):</p>'
+        . '<ul>' . $reasonsHtml . '</ul>'
+        . $docsHtml
+        . $customHtml
+        . '<p>Please complete the requirements and coordinate with the registrar for re-evaluation.</p>'
+        . '<p>Best regards,<br>Baesa Adventist Academy</p>';
+
+    $bodyText = "Dear {$toDisplayName},\n\n"
+        . "Your enrollment request was not approved due to:\n- " . implode("\n- ", $reasons) . "\n\n";
+    if (!empty($missingDocs)) {
+        $bodyText .= "Missing documents:\n- " . implode("\n- ", $missingDocs) . "\n\n";
+    }
+    if ($customMessage !== '') {
+        $bodyText .= "Additional note:\n{$customMessage}\n\n";
+    }
+    $bodyText .= "Please complete the requirements and coordinate with the registrar.\n\nBest regards,\nBaesa Adventist Academy\n";
+
+    try {
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host = $cfg['smtp_host'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $cfg['smtp_user'];
+        $mail->Password = $cfg['smtp_pass'];
+        $mail->SMTPSecure = $cfg['smtp_secure'] ?? 'tls';
+        $mail->Port = (int) ($cfg['smtp_port'] ?? 587);
+        $mail->CharSet = 'UTF-8';
+        $mail->SMTPAutoTLS = true;
+        $mail->Timeout = 30;
+        $mail->setFrom($cfg['from_email'], $cfg['from_name']);
+        $mail->addAddress($toEmail, $toDisplayName);
+        $mail->isHTML(true);
+        $mail->Subject = 'Enrollment Application Update - Baesa Adventist Academy';
+        $mail->Body = $bodyHtml;
+        $mail->AltBody = $bodyText;
+        $mail->send();
+        return [true, ''];
+    } catch (Exception $e) {
+        return [false, $e->getMessage()];
+    }
+}
+
+/**
+ * @return array{0:bool,1:string}
+ */
+function baa_send_assessment_form_mail(
+    string $toEmail,
+    string $toDisplayName,
+    string $attachmentPath
+): array {
+    $cfg = baa_load_mail_config();
+    if ($cfg['smtp_pass'] === '' || $cfg['smtp_pass'] === null) {
+        return [false, 'SMTP password not configured (add php/mail_config.local.php).'];
+    }
+
+    $mailRoot = __DIR__ . '/../PHPMailer/PHPMailer-master/src/';
+    if (!is_readable($mailRoot . 'PHPMailer.php')) {
+        return [false, 'PHPMailer library not found.'];
+    }
+    if (!is_readable($attachmentPath)) {
+        return [false, 'Assessment file not found for attachment.'];
+    }
+
+    require_once $mailRoot . 'Exception.php';
+    require_once $mailRoot . 'PHPMailer.php';
+    require_once $mailRoot . 'SMTP.php';
+
+    $loginUrl = baa_portal_base_url() . '/index.php';
+    $safeName = htmlspecialchars($toDisplayName, ENT_QUOTES, 'UTF-8');
+    $safeUrl = htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8');
+
+    $bodyHtml = '<p>Dear ' . $safeName . ',</p>'
+        . '<p>Your enrollment has been approved. Attached is your assessment form.</p>'
+        . '<p>You may log in to your portal here: <a href="' . $safeUrl . '">Student Portal</a></p>'
+        . '<p>Best regards,<br>Baesa Adventist Academy</p>';
+    $bodyText = "Dear {$toDisplayName},\n\nYour enrollment has been approved. Your assessment form is attached.\nPortal: {$loginUrl}\n\nBest regards,\nBaesa Adventist Academy\n";
+
+    try {
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host = $cfg['smtp_host'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $cfg['smtp_user'];
+        $mail->Password = $cfg['smtp_pass'];
+        $mail->SMTPSecure = $cfg['smtp_secure'] ?? 'tls';
+        $mail->Port = (int) ($cfg['smtp_port'] ?? 587);
+        $mail->CharSet = 'UTF-8';
+        $mail->SMTPAutoTLS = true;
+        $mail->Timeout = 30;
+        $mail->setFrom($cfg['from_email'], $cfg['from_name']);
+        $mail->addAddress($toEmail, $toDisplayName);
+        $mail->addAttachment($attachmentPath, basename($attachmentPath));
+        $mail->isHTML(true);
+        $mail->Subject = 'Assessment Form - Baesa Adventist Academy';
+        $mail->Body = $bodyHtml;
+        $mail->AltBody = $bodyText;
+        $mail->send();
+        return [true, ''];
+    } catch (Exception $e) {
+        return [false, $e->getMessage()];
+    }
+}
+
+/**
+ * @return array{0:bool,1:string}
+ */
+function baa_send_promotion_notice_mail(
+    string $toEmail,
+    string $toDisplayName,
+    string $oldGrade,
+    string $newGrade
+): array {
+    $cfg = baa_load_mail_config();
+    if ($cfg['smtp_pass'] === '' || $cfg['smtp_pass'] === null) {
+        return [false, 'SMTP password not configured (add php/mail_config.local.php).'];
+    }
+
+    $mailRoot = __DIR__ . '/../PHPMailer/PHPMailer-master/src/';
+    if (!is_readable($mailRoot . 'PHPMailer.php')) {
+        return [false, 'PHPMailer library not found.'];
+    }
+
+    require_once $mailRoot . 'Exception.php';
+    require_once $mailRoot . 'PHPMailer.php';
+    require_once $mailRoot . 'SMTP.php';
+
+    $safeName = htmlspecialchars($toDisplayName, ENT_QUOTES, 'UTF-8');
+    $safeOld = htmlspecialchars($oldGrade, ENT_QUOTES, 'UTF-8');
+    $safeNew = htmlspecialchars($newGrade, ENT_QUOTES, 'UTF-8');
+    $schoolYear = date('Y') . '-' . (date('Y') + 1);
+
+    $bodyHtml = '<p>Dear ' . $safeName . ',</p>'
+        . '<p>Congratulations for moving up from <strong>' . $safeOld . '</strong> to <strong>' . $safeNew . '</strong>!</p>'
+        . '<p>You did well this school year. Keep it up and continue doing your best in the next school year (' . htmlspecialchars($schoolYear, ENT_QUOTES, 'UTF-8') . ').</p>'
+        . '<p>We are proud of your progress.</p>'
+        . '<p>Best regards,<br>Baesa Adventist Academy</p>';
+
+    $bodyText = "Dear {$toDisplayName},\n\n"
+        . "Congratulations for moving up from {$oldGrade} to {$newGrade}!\n"
+        . "You did well this school year. Keep it up and continue doing your best in the next school year ({$schoolYear}).\n\n"
+        . "Best regards,\nBaesa Adventist Academy\n";
+
+    try {
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host = $cfg['smtp_host'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $cfg['smtp_user'];
+        $mail->Password = $cfg['smtp_pass'];
+        $mail->SMTPSecure = $cfg['smtp_secure'] ?? 'tls';
+        $mail->Port = (int) ($cfg['smtp_port'] ?? 587);
+        $mail->CharSet = 'UTF-8';
+        $mail->SMTPAutoTLS = true;
+        $mail->Timeout = 30;
+        $mail->setFrom($cfg['from_email'], $cfg['from_name']);
+        $mail->addAddress($toEmail, $toDisplayName);
+        $mail->isHTML(true);
+        $mail->Subject = 'Congratulations on your grade promotion - Baesa Adventist Academy';
+        $mail->Body = $bodyHtml;
+        $mail->AltBody = $bodyText;
+        $mail->send();
+        return [true, ''];
+    } catch (Exception $e) {
+        return [false, $e->getMessage()];
+    }
 }

@@ -9,8 +9,8 @@ try {
     exit();
 }
 
-// Check if user is admin or super_admin
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+// Check if user is admin, super_admin, or registrar
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'super_admin', 'registrar'])) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
@@ -28,7 +28,7 @@ try {
     // First get the enrollment info
     $enrollStmt = $pdo->prepare("
         SELECT id, 
-           CONCAT_WS(' ', first_name, middle_name, last_name, suffix) AS full_name
+           " . baa_full_name_sql() . " AS full_name
         FROM enrollments 
         WHERE id = ?
     ");

@@ -23,55 +23,122 @@ $dataType = isset($_GET['data_type']) ? $_GET['data_type'] : 'enrollees';
 $gradeFilter = isset($_GET['grade']) ? $_GET['grade'] : '';
 $sectionFilter = isset($_GET['section']) ? $_GET['section'] : '';
 
+function normalize_grade_level($gradeLevel) {
+    if ($gradeLevel === null) {
+        return null;
+    }
+
+    $grade = trim((string)$gradeLevel);
+    if ($grade === '') {
+        return null;
+    }
+
+    $map = [
+        '7' => 'Grade 7',
+        '8' => 'Grade 8',
+        '9' => 'Grade 9',
+        '10' => 'Grade 10',
+        '11' => 'Grade 11',
+        '12' => 'Grade 12',
+        'Grade 7' => 'Grade 7',
+        'Grade 8' => 'Grade 8',
+        'Grade 9' => 'Grade 9',
+        'Grade 10' => 'Grade 10',
+        'Grade 11' => 'Grade 11',
+        'Grade 12' => 'Grade 12'
+    ];
+
+    if (isset($map[$grade])) {
+        return $map[$grade];
+    }
+
+    if (preg_match('/^Grade\s*([7-9]|1[0-2])$/i', $grade, $matches)) {
+        return 'Grade ' . intval($matches[1]);
+    }
+
+    if (preg_match('/^(?:[0-9]|1[0-2])$/', $grade)) {
+        return 'Grade ' . intval($grade);
+    }
+
+    return null;
+}
+
 try {
-    if ($dataType === 'students') {
-        // Count registered students from users table
-        $sql = "SELECT grade_level, COUNT(*) as count FROM users WHERE role = 'student'";
-        $params = [];
-    } else {
-        // Count enrollment requests from enrollments table
-        $sql = "SELECT grade_level, COUNT(*) as count FROM enrollments WHERE 1=1";
-        $params = [];
-        
-    }
-
-    // Apply grade filter if provided
-    if (!empty($gradeFilter)) {
-        $sql .= " AND grade_level = :grade";
-        $params[':grade'] = $gradeFilter;
-    }
-    // Apply section filter if provided
-    if (!empty($sectionFilter)) {
-        $sql .= " AND section = :section";
-        $params[':section'] = $sectionFilter;
-    }
-
-    $sql .= " GROUP BY grade_level ORDER BY FIELD(grade_level, 
-              'Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12')";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Ensure all grade levels appear in the result
     $allGrades = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
-    $gradeCounts = [];
-    foreach ($data as $row) {
-        $gradeCounts[$row['grade_level']] = (int)$row['count'];
+    $gradeCounts = array_fill_keys($allGrades, 0);
+    $sections = [];
+    $filteredRows = [];
+
+    if ($dataType === 'students') {
+        $sql = "SELECT grade_level, section FROM users WHERE role = 'student'";
+        $params = [];
+        if (!empty($gradeFilter)) {
+            $sql .= " AND grade_level = :grade";
+            $params[':grade'] = $gradeFilter;
+        }
+        if (!empty($sectionFilter)) {
+            $sql .= " AND section = :section";
+            $params[':section'] = $sectionFilter;
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $filteredRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $sql = "SELECT grade_level FROM enrollments WHERE status = 'pending'";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($rows as $row) {
+            $normalizedGrade = normalize_grade_level($row['grade_level']);
+            if ($normalizedGrade === null) {
+                continue;
+            }
+
+            if (!empty($gradeFilter) && $normalizedGrade !== $gradeFilter) {
+                continue;
+            }
+
+            $filteredRows[] = [
+                'grade_level' => $normalizedGrade
+            ];
+        }
     }
 
-    $labels = [];
+    foreach ($filteredRows as $row) {
+        $normalizedGrade = normalize_grade_level($row['grade_level']);
+        if ($normalizedGrade === null) {
+            continue;
+        }
+
+        if (!isset($gradeCounts[$normalizedGrade])) {
+            $gradeCounts[$normalizedGrade] = 0;
+        }
+        $gradeCounts[$normalizedGrade]++;
+
+        if ($dataType === 'students' && !empty($gradeFilter) && $normalizedGrade === $gradeFilter && !empty($row['section'])) {
+            $sections[$row['section']] = true;
+        }
+    }
+
+    $labels = array_values($allGrades);
     $values = [];
     foreach ($allGrades as $grade) {
-        $labels[] = $grade;
-        $values[] = isset($gradeCounts[$grade]) ? $gradeCounts[$grade] : 0;
+        $values[] = $gradeCounts[$grade] ?? 0;
     }
 
-    echo json_encode([
+    $response = [
         'success' => true,
         'labels' => $labels,
         'values' => $values
-    ]);
+    ];
+
+    if (!empty($gradeFilter)) {
+        $response['sections'] = array_values(array_keys($sections));
+    }
+
+    echo json_encode($response);
 
 } catch (PDOException $e) {
     error_log("Chart data error: " . $e->getMessage());

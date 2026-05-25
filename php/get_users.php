@@ -38,12 +38,14 @@ $selectCols = "
     middle_name,
     last_name,
     suffix,
-    CONCAT_WS(' ', first_name, middle_name, last_name, suffix) AS full_name,
+" . baa_full_name_sql() . " AS full_name,
     age,
     gender,
     birthdate,
     phone,
-    strand
+    strand,
+    teacher_grade_level,
+    teacher_section
 ";
 
 try {
@@ -69,7 +71,7 @@ try {
         }
 
         if (!empty($search)) {
-            $whereConditions[] = '(CONCAT_WS(\' \', first_name, middle_name, last_name, suffix) LIKE ? OR username LIKE ? OR email LIKE ?)';
+            $whereConditions[] = '(' . baa_full_name_sql() . ' LIKE ? OR username LIKE ? OR email LIKE ?)';
             $term = '%' . $search . '%';
             $params[] = $term;
             $params[] = $term;

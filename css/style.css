@@ -795,6 +795,13 @@ body {
     flex-direction: column;
 }
 
+/* Allow schedule cells to wrap and break long lines to prevent overflow */
+.schedule-cell {
+    white-space: normal !important;
+    word-break: break-word;
+    max-width: 380px; /* keep table readable while allowing wrap */
+}
+
 .dashboard-card h3 {
     color: #0a2d63;
     font-size: 24px;

@@ -2,7 +2,7 @@
 session_start();
 require_once 'db.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'registrar'], true)) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;
@@ -20,6 +20,20 @@ if (!$userId || $status === null || !in_array($status, [0,1])) {
 if ($userId == $_SESSION['user_id']) {
     echo json_encode(['success' => false, 'message' => 'You cannot change your own status']);
     exit;
+}
+
+if ($_SESSION['role'] === 'registrar') {
+    $roleStmt = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
+    $roleStmt->execute([$userId]);
+    $targetRole = $roleStmt->fetchColumn();
+    if ($targetRole === false) {
+        echo json_encode(['success' => false, 'message' => 'User not found']);
+        exit;
+    }
+    if ($targetRole === 'admin') {
+        echo json_encode(['success' => false, 'message' => 'Registrar cannot modify admin status']);
+        exit;
+    }
 }
 
 $stmt = $pdo->prepare("UPDATE users SET status = ? WHERE id = ?");

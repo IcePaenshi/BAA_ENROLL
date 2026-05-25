@@ -1,0 +1,12 @@
+{
+    "name": "nso-laptop/baa_enroll",
+    "authors": [
+        {
+            "name": "IcePaenshi",
+            "email": "tbhidontknowwhat@gmail.com"
+        }
+    ],
+    "require": {
+        "phpoffice/phpspreadsheet": "^5.7"
+    }
+}

@@ -7,6 +7,8 @@ require_once 'db.php';
 require('../fpdf/fpdf.php');
 
 class PDF extends FPDF {
+    public $userName = 'Self-Encoded';
+
     // Page header
     function Header() {
         // School Logo 
@@ -61,7 +63,7 @@ class PDF extends FPDF {
         $this->SetY(-15);
         $this->SetFont('Arial', 'I', 8);
         $this->SetTextColor(100, 100, 100);
-        $this->Cell(0, 10, 'Page ' . $this->PageNo() . '/{nb} | Generated on ' . date('Y-m-d H:i:s'), 0, 0, 'C');
+        $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' | Encoded by ' . $this->userName . ' on ' . date('Y-m-d'), 0, 0, 'C');
     }
     
     // Section title
@@ -104,7 +106,7 @@ try {
     // Fetch enrollment data
     $stmt = $pdo->prepare("
         SELECT e.*,
-           CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name, e.suffix) AS full_name,
+           " . baa_full_name_sql('e') . " AS full_name,
            DATE_FORMAT(e.created_at, '%M %d, %Y %h:%i %p') as formatted_date,
            DATE_FORMAT(e.birthdate, '%M %d, %Y') as formatted_birthdate
         FROM enrollments e
@@ -127,8 +129,17 @@ try {
     $docStmt->execute([$enrollmentId]);
     $documents = $docStmt->fetchAll(PDO::FETCH_ASSOC);
     
+    // Fetch logged-in user name if session exists
+    $userName = 'Self-Encoded';
+    if (isset($_SESSION['user_id'])) {
+        $uStmt = $pdo->prepare("SELECT " . baa_full_name_sql() . " AS full_name FROM users WHERE id = ?");
+        $uStmt->execute([$_SESSION['user_id']]);
+        $userName = $uStmt->fetchColumn() ?: 'Self-Encoded';
+    }
+
     // Create PDF
     $pdf = new PDF();
+    $pdf->userName = $userName;
     $pdf->AliasNbPages();
     $pdf->AddPage();
     $pdf->SetMargins(15, 15, 15);

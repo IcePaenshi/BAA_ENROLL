@@ -52,6 +52,15 @@ if (!is_numeric($monthlyPaymentAmount) || $monthlyPaymentAmount <= 0) {
 try {
     $pdo->beginTransaction();
 
+    // Replace only auto-generated monthly schedule rows so plan updates stay consistent.
+    $deleteStmt = $pdo->prepare("
+        DELETE FROM payables
+        WHERE student_id = ?
+          AND status = 'pending'
+          AND item_name LIKE 'Monthly Tuition Payment %'
+    ");
+    $deleteStmt->execute([$studentId]);
+
     // Set first due date to the 10th of next month (adjust as needed)
     $dueDate = new DateTime();
     $dueDate->modify('first day of next month')->setDate($dueDate->format('Y'), $dueDate->format('m'), 10);
@@ -80,7 +89,11 @@ try {
     }
 
     $pdo->commit();
-    echo json_encode(['success' => true, 'message' => 'Payables added successfully']);
+    echo json_encode([
+        'success' => true,
+        'message' => 'Monthly payment schedule updated successfully',
+        'months_plan' => (int) $monthlyPayments
+    ]);
 } catch (PDOException $e) {
     $pdo->rollBack();
     echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
