@@ -9,8 +9,8 @@ try {
     exit();
 }
 
-// Check if user is admin or registrar
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'registrar'])) {
+// Check if user is admin, registrar, or cashier
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'registrar', 'cashier'], true)) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
@@ -36,26 +36,26 @@ try {
     // Get paginated enrollments
     $stmt = $pdo->prepare("
         SELECT 
-        e.id,
-        " . baa_full_name_sql('e') . " AS full_name,
-        e.first_name,
-        e.middle_name,
-        e.last_name,
-        e.suffix,
-        e.age,
-        e.gender,
-        e.birthdate,
-        e.email,
-        e.phone,
-        e.grade_level,
-        e.strand,
-        e.student_type,
-        e.status,
-        e.created_at,
-        e.lrn,
-        u.section,
-        COUNT(ed.id) as document_count,
-        COALESCE(dp.total_downpayment, 0) AS downpayment_total
+            e.id,
+            " . baa_full_name_sql('e') . " AS full_name,
+            e.first_name,
+            e.middle_name,
+            e.last_name,
+            e.suffix,
+            e.age,
+            e.gender,
+            e.birthdate,
+            e.email,
+            e.phone,
+            e.grade_level,
+            e.strand,
+            e.student_type,
+            e.status,
+            e.created_at,
+            e.lrn,
+            u.section,
+            COUNT(ed.id) AS document_count,
+            COALESCE(dp.total_downpayment, 0) AS downpayment_total
         FROM enrollments e
         LEFT JOIN enrollment_documents ed ON e.id = ed.enrollment_id
         LEFT JOIN users u ON u.student_id = CONCAT('ENR-', e.id) AND u.role = 'student'
@@ -64,7 +64,7 @@ try {
             FROM enrollment_downpayments
             GROUP BY enrollment_id
         ) dp ON dp.enrollment_id = e.id
-        GROUP BY e.id
+        GROUP BY e.id, u.section
         ORDER BY e.created_at DESC
         LIMIT :limit OFFSET :offset
     ");

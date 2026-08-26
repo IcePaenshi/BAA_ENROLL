@@ -1,7 +1,47 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once __DIR__ . '/db.php';
 header('Content-Type: application/json');
+
+function baa_ensure_payment_mode_columns(PDO $pdo): void {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS student_downpayments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            payment_date DATE NOT NULL,
+            processed_by INT NOT NULL,
+            payment_mode VARCHAR(32) DEFAULT 'cash',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_student_id (student_id)
+        )");
+    } catch (PDOException $e) {
+        // ignore if creation fails due to existing schema differences
+    }
+
+    try {
+        $pdo->exec("ALTER TABLE student_downpayments ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(32) DEFAULT 'cash'");
+    } catch (PDOException $e) {
+        // ignore if old MySQL syntax doesn't support IF NOT EXISTS or column already exists
+        try {
+            $pdo->exec("ALTER TABLE student_downpayments ADD COLUMN payment_mode VARCHAR(32) DEFAULT 'cash'");
+        } catch (PDOException $ignored) {
+            // ignore duplicate column errors
+        }
+    }
+
+    try {
+        $pdo->exec("ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50) DEFAULT 'cash'");
+    } catch (PDOException $e) {
+        try {
+            $pdo->exec("ALTER TABLE payments ADD COLUMN payment_mode VARCHAR(50) DEFAULT 'cash'");
+        } catch (PDOException $ignored) {
+            // ignore duplicate column errors
+        }
+    }
+}
+
+baa_ensure_payment_mode_columns($pdo);
 
 // Check if user is admin or cashier
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'cashier'])) {
@@ -22,6 +62,9 @@ $enrollmentId = $_POST['enrollment_id'] ?? '';
 $amount = $_POST['amount'] ?? '';
 $paymentType = strtolower(trim((string) ($_POST['payment_type'] ?? '')));
 $paymentMode = strtolower(trim((string) ($_POST['payment_mode'] ?? '')));
+if ($paymentMode === '') {
+    $paymentMode = 'cash';
+}
 $paymentDate = trim((string) ($_POST['payment_date'] ?? ''));
 if ($paymentDate === '') {
     $paymentDate = date('Y-m-d');

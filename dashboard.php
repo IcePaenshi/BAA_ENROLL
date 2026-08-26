@@ -1669,6 +1669,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             return v('tuition') + v('misc') + v('aircon') + v('hsa') + v('books');
         }
 
+        function gradeToFeeId(grade) {
+            return String(grade).trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_-]/g, '');
+        }
+
         function renderTuitionFeeManagerTable() {
             const tableEl = document.getElementById('tuitionFeeManagerTable');
             if (!tableEl) return;
@@ -1698,11 +1702,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 html += `
                     <tr class="border-b border-gray-200 hover:bg-gray-50">
                         <td class="p-3 font-semibold text-gray-800 whitespace-nowrap">${escapeHtml(g)}</td>
-                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_tuition" value="${b.tuition}"></td>
-                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_misc" value="${b.misc}"></td>
-                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_aircon" value="${b.aircon}"></td>
-                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_hsa" value="${b.hsa}"></td>
-                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${g}_books" value="${b.books}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${gradeToFeeId(g)}_tuition" value="${b.tuition}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${gradeToFeeId(g)}_misc" value="${b.misc}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${gradeToFeeId(g)}_aircon" value="${b.aircon}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${gradeToFeeId(g)}_hsa" value="${b.hsa}"></td>
+                        <td class="p-3 text-right"><input class="w-32 p-2 border border-gray-300 rounded text-right" type="number" step="0.01" min="0" id="fee_${gradeToFeeId(g)}_books" value="${b.books}"></td>
                         <td class="p-3 text-right font-bold text-[#0a2d63]">₱${fmt(total)}</td>
                         <td class="p-3 text-center">
                             <div class="flex flex-col sm:flex-row gap-2 justify-center">
@@ -1723,7 +1727,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         function readFeeRow(grade) {
-            const get = (k) => parseFloat(document.getElementById(`fee_${grade}_${k}`)?.value || '0') || 0;
+            const rowId = gradeToFeeId(grade);
+            const get = (k) => parseFloat(document.getElementById(`fee_${rowId}_${k}`)?.value || '0') || 0;
             return { tuition: get('tuition'), misc: get('misc'), aircon: get('aircon'), hsa: get('hsa'), books: get('books') };
         }
 
@@ -7938,6 +7943,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         return {
                             id: String(e.id),
                             name: String(e.full_name || '').trim(),
+                            email: String(e.email || '').trim(),
                             grade: String(e.grade_level || ''),
                             downpayment_total: parseFloat(e.downpayment_total || 0)
                         };
@@ -9667,11 +9673,31 @@ function getNotifIcon(type) {
     }
 }
 
+function parseNotificationDate(dateStr) {
+    if (!dateStr) return null;
+    const trimmed = dateStr.trim();
+
+    if (trimmed.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(trimmed)) {
+        return new Date(trimmed);
+    }
+
+    if (trimmed.includes('T')) {
+        return new Date(trimmed);
+    }
+
+    const [datePart, timePart = '00:00:00'] = trimmed.split(' ');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour = 0, minute = 0, second = 0] = timePart.split(':').map(Number);
+    return new Date(year, month - 1, day, hour, minute, second);
+}
+
 function formatTimeAgo(dateStr) {
-    const date = new Date(dateStr);
+    const date = parseNotificationDate(dateStr);
+    if (!date || isNaN(date.getTime())) return '';
+
     const now = new Date();
     const diff = Math.floor((now - date) / 1000);
-    
+
     if (diff < 60) return 'Just now';
     if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';

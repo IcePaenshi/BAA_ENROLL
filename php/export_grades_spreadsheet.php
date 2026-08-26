@@ -83,13 +83,25 @@ try {
     // Name: U-AF 15
     $faceSheet->setCellValue('U15', $student['full_name']);
     // LRN: Z-AF 16
-    $faceSheet->setCellValue('Z16', $student['lrn'] ?: '');
+    $lrnValue = $student['lrn'] ?: '';
+    $faceSheet->setCellValueExplicit('Z16', (string)$lrnValue, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
     // Age: U-V 17
     $faceSheet->setCellValue('U17', $student['age'] ?: '');
-    // Sex: AB-AF 17
-    $faceSheet->setCellValue('AB17', $student['gender'] ?: '');
-    // Grade: U-V 18
-    $faceSheet->setCellValue('U18', $student['grade_level'] ?: '');
+
+    // Sex: AB-AF 17 (Using M/F for better fit)
+    $sex = $student['gender'] ? strtoupper(substr($student['gender'], 0, 1)) : '';
+    $faceSheet->setCellValue('AB17', $sex);
+
+    // Grade: U-W 18 (Spanning U, V, W as requested)
+    $gradeVal = $student['grade_level'] ?: '';
+    $faceSheet->setCellValue('U18', $gradeVal);
+    try {
+        // Attempt to merge or ensure it spans to W18
+        $faceSheet->mergeCells('U18:W18');
+        $faceSheet->getStyle('U18')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+    } catch (Exception $e) {}
+
     // Section: AB-AF 18
     $faceSheet->setCellValue('AB18', $student['section'] ?: '');
     // Class Advisor: Y-AF 27

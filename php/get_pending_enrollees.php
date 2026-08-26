@@ -2,7 +2,7 @@
 session_start();
 header('Content-Type: application/json');
 
-require_once 'db.php';
+require_once __DIR__ . '/db.php';
 
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'cashier'], true)) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
